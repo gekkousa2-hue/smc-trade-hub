@@ -1,4 +1,5 @@
 import { TrendingUp, ArrowDownUp, Layers } from "lucide-react";
+import { motion } from "framer-motion";
 
 const concepts = [
   {
@@ -45,9 +46,12 @@ const concepts = [
 export default function SmcConcepts() {
   return (
     <div className="grid gap-5 md:grid-cols-3">
-      {concepts.map((c) => (
-        <div
+      {concepts.map((c, index) => (
+        <motion.div
           key={c.tag}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: index * 0.15, ease: "easeOut" }}
           className="group rounded-lg border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-[0_0_30px_-10px_hsl(var(--primary)/0.15)]"
         >
           <div className="mb-4 flex items-center gap-3">
@@ -68,7 +72,7 @@ export default function SmcConcepts() {
               </li>
             ))}
           </ul>
-        </div>
+        </motion.div>
       ))}
     </div>
   );
