@@ -62,7 +62,7 @@ export default function XauusdChart() {
       },
     });
 
-    const series = chart.addCandlestickSeries({
+    const series = chart.addSeries(CandlestickSeries, {
       upColor: "hsl(142, 60%, 45%)",
       downColor: "hsl(0, 72%, 55%)",
       borderUpColor: "hsl(142, 60%, 45%)",
