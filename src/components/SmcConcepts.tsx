@@ -1,4 +1,5 @@
 import { TrendingUp, ArrowDownUp, Layers } from "lucide-react";
+import { motion } from "framer-motion";
 
 const concepts = [
   {
