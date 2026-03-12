@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { createChart, ColorType, CandlestickData, Time } from "lightweight-charts";
+import { createChart, ColorType, CandlestickData, Time, CandlestickSeries } from "lightweight-charts";
 
 // Generate realistic XAUUSD data
 function generateXauusdData(): CandlestickData<Time>[] {
