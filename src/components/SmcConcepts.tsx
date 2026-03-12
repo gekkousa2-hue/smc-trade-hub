@@ -72,7 +72,7 @@ export default function SmcConcepts() {
               </li>
             ))}
           </ul>
-        </div>
+        </motion.div>
       ))}
     </div>
   );
