@@ -7,7 +7,6 @@ export default function XauusdChart() {
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Clear any previous widget
     containerRef.current.innerHTML = "";
 
     const widgetContainer = document.createElement("div");
@@ -35,7 +34,6 @@ export default function XauusdChart() {
       hide_side_toolbar: false,
       withdateranges: true,
       details: true,
-      hotlist: false,
       support_host: "https://www.tradingview.com",
     });
 
@@ -44,13 +42,12 @@ export default function XauusdChart() {
     containerRef.current.appendChild(widgetContainer);
     containerRef.current.appendChild(script);
 
-    // Fallback: mark loaded after timeout
     const timeout = setTimeout(() => setIsLoaded(true), 3000);
     return () => clearTimeout(timeout);
   }, []);
 
   return (
-    <div className="relative">
+    <div className="relative w-full" style={{ height: "calc(100vh - 180px)", minHeight: "500px" }}>
       {!isLoaded && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-card">
           <div className="flex items-center gap-3">
@@ -61,7 +58,7 @@ export default function XauusdChart() {
       )}
       <div
         ref={containerRef}
-        className="tradingview-widget-container w-full h-[500px]"
+        className="tradingview-widget-container w-full h-full"
       />
     </div>
   );
