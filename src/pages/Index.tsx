@@ -36,13 +36,22 @@ const Index = () => {
                 <span>UTC</span>
               </div>
             </div>
-            <div className="flex items-center gap-2 rounded-full glass px-3 py-1.5">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
-              </span>
-              <span className="font-mono text-xs font-medium text-foreground">XAUUSD</span>
-              <Zap className="h-3 w-3 text-primary" />
+            <div className="flex items-center gap-3">
+              <Link
+                to="/chat"
+                className="flex items-center gap-2 rounded-full bg-primary px-3.5 py-1.5 font-display text-xs font-semibold text-primary-foreground transition-all hover:opacity-90 shadow-[0_0_20px_-4px_hsl(45_93%_58%/0.3)]"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                Chat
+              </Link>
+              <div className="flex items-center gap-2 rounded-full glass px-3 py-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+                </span>
+                <span className="font-mono text-xs font-medium text-foreground">XAUUSD</span>
+                <Zap className="h-3 w-3 text-primary" />
+              </div>
             </div>
           </div>
         </div>
