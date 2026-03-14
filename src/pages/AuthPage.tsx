@@ -21,15 +21,17 @@ export default function AuthPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: { username: username || `User_${Date.now().toString(36)}` },
-            emailRedirectTo: window.location.origin,
           },
         });
         if (error) throw error;
+        if (data.user && !data.session) {
+          setError("Emailingizni tasdiqlang yoki qayta kiring.");
+        }
       }
     } catch (err: any) {
       setError(err.message);
