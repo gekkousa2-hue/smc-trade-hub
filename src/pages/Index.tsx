@@ -1,5 +1,6 @@
-import { Activity, TrendingUp, Zap, Clock, BarChart3 } from "lucide-react";
+import { Activity, TrendingUp, Zap, Clock, BarChart3, MessageCircle } from "lucide-react";
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import XauusdChart from "@/components/XauusdChart";
 import SmcConcepts from "@/components/SmcConcepts";
 
