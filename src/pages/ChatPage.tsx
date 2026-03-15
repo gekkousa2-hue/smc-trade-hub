@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, LogOut, ArrowLeft, Search, MessageCircle, X, Users } from "lucide-react";
+import { Send, ArrowLeft, Search, MessageCircle, X, Users } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
-import { useNavigate } from "react-router-dom";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Profile {
@@ -43,7 +42,6 @@ export default function ChatPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
 
   // Get current user
   useEffect(() => {
@@ -253,7 +251,7 @@ export default function ChatPage() {
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-[calc(100vh-4rem)] bg-background">
       {/* Sidebar */}
       <div
         className={`${
@@ -261,22 +259,8 @@ export default function ChatPage() {
         } w-full md:w-80 flex-col border-r border-border/50 glass`}
       >
         {/* Sidebar Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate("/")}
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-            <h1 className="font-display text-lg font-bold text-foreground">Xabarlar</h1>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-1.5 rounded-lg bg-secondary px-3 py-1.5 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-          </button>
+        <div className="flex items-center px-4 py-3 border-b border-border/50">
+          <h1 className="font-display text-lg font-bold text-foreground">Xabarlar</h1>
         </div>
 
         {/* Search */}
