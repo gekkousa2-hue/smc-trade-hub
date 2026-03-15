@@ -251,7 +251,7 @@ export default function ChatPage() {
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-[calc(100vh-4rem)] bg-background">
       {/* Sidebar */}
       <div
         className={`${
