@@ -6,10 +6,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
-import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/AuthPage";
-import ChatPage from "./pages/ChatPage";
+import MainLayout from "./pages/MainLayout";
 
 const queryClient = new QueryClient();
 
@@ -51,9 +50,8 @@ const App = () => {
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/auth" element={user ? <Navigate to="/chat" replace /> : <AuthPage />} />
-            <Route path="/chat" element={<AuthGuard user={user}><ChatPage /></AuthGuard>} />
+            <Route path="/" element={<AuthGuard user={user}><MainLayout /></AuthGuard>} />
+            <Route path="/auth" element={user ? <Navigate to="/" replace /> : <AuthPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
