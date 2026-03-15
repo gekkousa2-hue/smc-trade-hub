@@ -42,7 +42,6 @@ export default function ChatPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
 
   // Get current user
   useEffect(() => {
