@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, LogOut, ArrowLeft, Search, MessageCircle, X, Users } from "lucide-react";
+import { Send, ArrowLeft, Search, MessageCircle, X, Users } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
-import { useNavigate } from "react-router-dom";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Profile {
