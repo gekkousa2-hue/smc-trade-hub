@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, ArrowLeft, Search, MessageCircle, X, Users } from "lucide-react";
+import {
+  Send,
+  ArrowLeft,
+  Search,
+  MessageSquare,
+  X,
+  Check,
+  CheckCheck,
+  MessagesSquare,
+} from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -41,14 +50,13 @@ export default function ChatPage() {
   const [searchResults, setSearchResults] = useState<Profile[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Get current user
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
   }, []);
 
-  // Fetch conversations
   const fetchConversations = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
@@ -59,7 +67,6 @@ export default function ChatPage() {
 
     if (!data) return;
 
-    // Fetch other user profiles and last messages
     const enriched = await Promise.all(
       data.map(async (conv) => {
         const otherUserId = conv.user1_id === user.id ? conv.user2_id : conv.user1_id;
@@ -93,13 +100,11 @@ export default function ChatPage() {
     fetchConversations();
   }, [fetchConversations]);
 
-  // Fetch messages for active conversation
   useEffect(() => {
     if (!activeConversationId) {
       setMessages([]);
       return;
     }
-
     const fetchMessages = async () => {
       const { data } = await supabase
         .from("messages")
@@ -112,10 +117,8 @@ export default function ChatPage() {
     fetchMessages();
   }, [activeConversationId]);
 
-  // Real-time subscription for messages
   useEffect(() => {
     if (!activeConversationId) return;
-
     const channel = supabase
       .channel(`messages-${activeConversationId}`)
       .on(
@@ -141,6 +144,7 @@ export default function ChatPage() {
             if (prev.some((m) => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
+          fetchConversations();
         }
       )
       .subscribe();
@@ -148,9 +152,8 @@ export default function ChatPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [activeConversationId]);
+  }, [activeConversationId, fetchConversations]);
 
-  // Real-time subscription for new conversations
   useEffect(() => {
     if (!user) return;
     const channel = supabase
@@ -161,24 +164,20 @@ export default function ChatPage() {
         () => fetchConversations()
       )
       .subscribe();
-
     return () => {
       supabase.removeChannel(channel);
     };
   }, [user, fetchConversations]);
 
-  // Auto-scroll
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Search users
   useEffect(() => {
     if (!searchQuery.trim() || !user) {
       setSearchResults([]);
       return;
     }
-
     const timeout = setTimeout(async () => {
       const { data } = await supabase
         .from("profiles")
@@ -188,23 +187,18 @@ export default function ChatPage() {
         .limit(10);
       setSearchResults(data || []);
     }, 300);
-
     return () => clearTimeout(timeout);
   }, [searchQuery, user]);
 
-  // Open or create conversation with a user
   const openConversation = async (otherUserId: string) => {
     if (!user) return;
-
     const { data, error } = await supabase.rpc("get_or_create_conversation", {
       other_user_id: otherUserId,
     });
-
     if (error) {
       console.error("Error creating conversation:", error);
       return;
     }
-
     setActiveConversationId(data as string);
     setSearchQuery("");
     setSearchResults([]);
@@ -213,13 +207,24 @@ export default function ChatPage() {
     fetchConversations();
   };
 
-  // Send message
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !user || !activeConversationId) return;
+    if (!newMessage.trim() || !user || !activeConversationId || sending) return;
 
     const content = newMessage.trim();
     setNewMessage("");
+    setSending(true);
+
+    // Optimistic add
+    const optimisticMsg: Message = {
+      id: `temp-${Date.now()}`,
+      content,
+      sender_id: user.id,
+      created_at: new Date().toISOString(),
+      conversation_id: activeConversationId,
+      profiles: null,
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
 
     await supabase.from("messages").insert({
       content,
@@ -227,26 +232,29 @@ export default function ChatPage() {
       conversation_id: activeConversationId,
     });
 
+    setSending(false);
     fetchConversations();
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
   };
 
   const getInitials = (name: string) => name.slice(0, 2).toUpperCase();
 
   const getAvatarColor = (id: string) => {
     const colors = [
-      "bg-primary/80",
-      "bg-[hsl(142_60%_45%/0.8)]",
-      "bg-[hsl(0_72%_55%/0.8)]",
-      "bg-[hsl(210_80%_55%/0.8)]",
-      "bg-[hsl(270_60%_55%/0.8)]",
-      "bg-[hsl(330_60%_55%/0.8)]",
+      "from-primary/90 to-primary/50",
+      "from-[hsl(142_60%_45%)] to-[hsl(142_60%_35%)]",
+      "from-[hsl(210_80%_55%)] to-[hsl(210_80%_40%)]",
+      "from-[hsl(270_60%_55%)] to-[hsl(270_60%_40%)]",
+      "from-[hsl(330_60%_55%)] to-[hsl(330_60%_40%)]",
+      "from-[hsl(20_80%_55%)] to-[hsl(20_80%_40%)]",
     ];
     return colors[id.charCodeAt(0) % colors.length];
   };
+
+  const formatTime = (dateStr: string) =>
+    new Date(dateStr).toLocaleTimeString("uz", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
 
@@ -256,15 +264,16 @@ export default function ChatPage() {
       <div
         className={`${
           showSidebar ? "flex" : "hidden md:flex"
-        } w-full md:w-80 flex-col border-r border-border/50 glass`}
+        } w-full md:w-80 flex-col border-r border-border/30`}
       >
         {/* Sidebar Header */}
-        <div className="flex items-center px-4 py-3 border-b border-border/50">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border/30">
+          <MessagesSquare className="h-5 w-5 text-primary" />
           <h1 className="font-display text-lg font-bold text-foreground">Xabarlar</h1>
         </div>
 
         {/* Search */}
-        <div className="px-3 py-2">
+        <div className="px-3 py-2.5">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -274,8 +283,8 @@ export default function ChatPage() {
                 setSearchQuery(e.target.value);
                 setIsSearching(!!e.target.value);
               }}
-              placeholder="Foydalanuvchi qidirish..."
-              className="w-full rounded-lg bg-secondary pl-9 pr-8 py-2 text-sm text-foreground outline-none ring-1 ring-border transition-all focus:ring-primary placeholder:text-muted-foreground"
+              placeholder="Treyderlarni qidirish..."
+              className="w-full rounded-xl bg-secondary/80 pl-9 pr-8 py-2.5 text-sm text-foreground outline-none ring-1 ring-border/50 transition-all focus:ring-primary/50 focus:bg-secondary placeholder:text-muted-foreground"
             />
             {searchQuery && (
               <button
@@ -284,7 +293,7 @@ export default function ChatPage() {
                   setSearchResults([]);
                   setIsSearching(false);
                 }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -292,7 +301,7 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Search Results / Conversations List */}
+        {/* List */}
         <ScrollArea className="flex-1">
           {isSearching ? (
             <div className="px-2 py-1">
@@ -300,24 +309,24 @@ export default function ChatPage() {
                 Natijalar
               </p>
               {searchResults.length === 0 && searchQuery.trim() && (
-                <p className="px-3 py-4 text-center text-sm text-muted-foreground">
-                  Topilmadi
+                <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  Hech narsa topilmadi
                 </p>
               )}
               {searchResults.map((profile) => (
                 <button
                   key={profile.user_id}
                   onClick={() => openConversation(profile.user_id)}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-secondary"
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition-all hover:bg-secondary/80 active:scale-[0.98]"
                 >
                   <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${getAvatarColor(profile.user_id)}`}
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${getAvatarColor(profile.user_id)}`}
                   >
                     {getInitials(profile.username)}
                   </div>
                   <div className="text-left">
                     <p className="text-sm font-medium text-foreground">{profile.username}</p>
-                    <p className="text-xs text-muted-foreground">Xabar yozish</p>
+                    <p className="text-xs text-primary/70 font-mono">Xabar yozish →</p>
                   </div>
                 </button>
               ))}
@@ -325,11 +334,15 @@ export default function ChatPage() {
           ) : (
             <div className="px-2 py-1">
               {conversations.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <MessageCircle className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                  <p className="text-sm text-muted-foreground">Hali chatlar yo'q</p>
-                  <p className="text-xs text-muted-foreground/60 mt-1">
-                    Yuqoridagi qidiruvdan foydalaning
+                <div className="flex flex-col items-center justify-center py-16 text-center px-6">
+                  <div className="flex h-20 w-20 items-center justify-center rounded-2xl glass border-glow mb-4">
+                    <MessageSquare className="h-9 w-9 text-primary/50" />
+                  </div>
+                  <h3 className="font-display text-base font-bold text-foreground mb-1">
+                    Suhbatlar yo'q
+                  </h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Suhbatni boshlash uchun yuqoridagi qidiruvdan treyderlarni toping
                   </p>
                 </div>
               ) : (
@@ -340,14 +353,14 @@ export default function ChatPage() {
                       setActiveConversationId(conv.id);
                       setShowSidebar(false);
                     }}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ${
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 mb-0.5 transition-all active:scale-[0.98] ${
                       activeConversationId === conv.id
                         ? "bg-primary/10 ring-1 ring-primary/20"
-                        : "hover:bg-secondary"
+                        : "hover:bg-secondary/60"
                     }`}
                   >
                     <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${getAvatarColor(conv.other_user?.user_id || "")}`}
+                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${getAvatarColor(conv.other_user?.user_id || "")}`}
                     >
                       {getInitials(conv.other_user?.username || "?")}
                     </div>
@@ -358,10 +371,7 @@ export default function ChatPage() {
                         </p>
                         {conv.last_message_at && (
                           <span className="font-mono text-[10px] text-muted-foreground/60 ml-2 shrink-0">
-                            {new Date(conv.last_message_at).toLocaleTimeString("uz", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {formatTime(conv.last_message_at)}
                           </span>
                         )}
                       </div>
@@ -388,15 +398,15 @@ export default function ChatPage() {
         {activeConversationId && activeConversation ? (
           <>
             {/* Chat Header */}
-            <header className="glass sticky top-0 z-50 flex items-center gap-3 px-4 py-3 border-b border-border/50">
+            <header className="glass sticky top-0 z-50 flex items-center gap-3 px-4 py-3 border-b border-border/30">
               <button
                 onClick={() => setShowSidebar(true)}
-                className="flex md:hidden h-8 w-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground transition-colors hover:text-foreground"
+                className="flex md:hidden h-8 w-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground transition-colors hover:text-foreground active:scale-95"
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
               <div
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${getAvatarColor(activeConversation.other_user?.user_id || "")}`}
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${getAvatarColor(activeConversation.other_user?.user_id || "")}`}
               >
                 {getInitials(activeConversation.other_user?.username || "?")}
               </div>
@@ -404,7 +414,7 @@ export default function ChatPage() {
                 <h2 className="font-display text-sm font-bold text-foreground">
                   {activeConversation.other_user?.username || "Noma'lum"}
                 </h2>
-                <p className="font-mono text-[10px] text-muted-foreground">Shaxsiy chat</p>
+                <p className="font-mono text-[10px] text-primary/60">SMC Trader</p>
               </div>
             </header>
 
@@ -412,45 +422,51 @@ export default function ChatPage() {
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
               {messages.length === 0 && (
                 <div className="flex h-full items-center justify-center">
-                  <p className="text-sm text-muted-foreground">
-                    Salomlashing! 👋
-                  </p>
+                  <div className="text-center">
+                    <p className="text-2xl mb-2">👋</p>
+                    <p className="text-sm text-muted-foreground">
+                      Salomlashing va suhbatni boshlang!
+                    </p>
+                  </div>
                 </div>
               )}
               <AnimatePresence initial={false}>
                 {messages.map((msg) => {
                   const isOwn = msg.sender_id === user?.id;
-                  const username = msg.profiles?.username || "Noma'lum";
+                  const isTemp = msg.id.startsWith("temp-");
 
                   return (
                     <motion.div
                       key={msg.id}
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      initial={{ opacity: 0, y: 8, scale: 0.96 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
-                      transition={{ duration: 0.2 }}
-                      className={`flex gap-2.5 ${isOwn ? "flex-row-reverse" : ""}`}
+                      transition={{ duration: 0.15 }}
+                      className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
                     >
-                      <div
-                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${getAvatarColor(msg.sender_id)}`}
-                      >
-                        {getInitials(username)}
-                      </div>
-                      <div className={`max-w-[75%] ${isOwn ? "items-end" : "items-start"}`}>
+                      <div className={`max-w-[78%] ${isOwn ? "items-end" : "items-start"} flex flex-col`}>
                         <div
-                          className={`rounded-2xl px-3.5 py-2 text-sm leading-relaxed ${
+                          className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
                             isOwn
-                              ? "rounded-br-sm bg-primary text-primary-foreground"
-                              : "rounded-bl-sm glass"
+                              ? "rounded-br-md bg-primary text-primary-foreground shadow-[0_2px_12px_-4px_hsl(45_93%_58%/0.3)]"
+                              : "rounded-bl-md glass"
                           }`}
                         >
                           {msg.content}
                         </div>
-                        <p className="mt-0.5 font-mono text-[10px] text-muted-foreground/60">
-                          {new Date(msg.created_at).toLocaleTimeString("uz", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
+                        <div className={`flex items-center gap-1 mt-0.5 ${isOwn ? "flex-row-reverse" : ""}`}>
+                          <span className="font-mono text-[10px] text-muted-foreground/50">
+                            {formatTime(msg.created_at)}
+                          </span>
+                          {isOwn && (
+                            <span className="text-primary/70">
+                              {isTemp ? (
+                                <Check className="h-3 w-3" />
+                              ) : (
+                                <CheckCheck className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </motion.div>
                   );
@@ -460,19 +476,19 @@ export default function ChatPage() {
             </div>
 
             {/* Input */}
-            <div className="glass border-t border-border/50 px-4 py-3">
+            <div className="glass border-t border-border/30 px-4 py-3">
               <form onSubmit={sendMessage} className="flex items-center gap-2">
                 <input
                   type="text"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   placeholder="Xabar yozing..."
-                  className="flex-1 rounded-xl bg-secondary px-4 py-2.5 text-sm text-foreground outline-none ring-1 ring-border transition-all focus:ring-primary placeholder:text-muted-foreground"
+                  className="flex-1 rounded-xl bg-secondary/80 px-4 py-2.5 text-sm text-foreground outline-none ring-1 ring-border/50 transition-all focus:ring-primary/50 focus:bg-secondary placeholder:text-muted-foreground"
                 />
                 <button
                   type="submit"
-                  disabled={!newMessage.trim()}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:opacity-90 disabled:opacity-30"
+                  disabled={!newMessage.trim() || sending}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:shadow-[0_0_20px_-4px_hsl(45_93%_58%/0.4)] active:scale-95 disabled:opacity-30 disabled:shadow-none"
                 >
                   <Send className="h-4 w-4" />
                 </button>
@@ -481,15 +497,21 @@ export default function ChatPage() {
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center text-center p-8">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary mb-4">
-              <Users className="h-8 w-8 text-muted-foreground/50" />
-            </div>
-            <h2 className="font-display text-lg font-bold text-foreground mb-1">
-              Chatni tanlang
-            </h2>
-            <p className="text-sm text-muted-foreground max-w-xs">
-              Chap tomondagi ro'yxatdan chat tanlang yoki yangi foydalanuvchini qidiring
-            </p>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex flex-col items-center"
+            >
+              <div className="flex h-20 w-20 items-center justify-center rounded-2xl glass border-glow mb-5">
+                <MessageSquare className="h-9 w-9 text-primary/50" />
+              </div>
+              <h2 className="font-display text-lg font-bold text-foreground mb-1.5">
+                Suhbatni tanlang
+              </h2>
+              <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
+                Chap tomondagi ro'yxatdan chat tanlang yoki treyderlarni qidiring
+              </p>
+            </motion.div>
           </div>
         )}
       </div>
