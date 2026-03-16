@@ -515,7 +515,7 @@ export default function ChatPage() {
                 />
                 <button
                   type="submit"
-                  disabled={!newMessage.trim() || sending}
+                  disabled={!newMessage.trim()}
                   className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:shadow-[0_0_20px_-4px_hsl(45_93%_58%/0.4)] active:scale-95 disabled:opacity-30 disabled:shadow-none"
                 >
                   <Send className="h-4 w-4" />
