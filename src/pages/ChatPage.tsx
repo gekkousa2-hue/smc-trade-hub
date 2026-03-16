@@ -132,6 +132,13 @@ export default function ChatPage() {
           filter: `conversation_id=eq.${activeConversationId}`,
         },
         async (payload) => {
+          const newId = payload.new.id as string;
+          // Skip if this is our own optimistic message
+          if (tempToRealId.current.has(newId)) {
+            tempToRealId.current.delete(newId);
+            return;
+          }
+
           const { data: profile } = await supabase
             .from("profiles")
             .select("username, avatar_url")
