@@ -50,8 +50,10 @@ export default function ChatPage() {
   const [searchResults, setSearchResults] = useState<Profile[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
-  const [sending, setSending] = useState(false);
+  const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
+  const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
+  const tempToRealId = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
@@ -130,6 +132,13 @@ export default function ChatPage() {
           filter: `conversation_id=eq.${activeConversationId}`,
         },
         async (payload) => {
+          const newId = payload.new.id as string;
+          // Skip if this is our own optimistic message
+          if (tempToRealId.current.has(newId)) {
+            tempToRealId.current.delete(newId);
+            return;
+          }
+
           const { data: profile } = await supabase
             .from("profiles")
             .select("username, avatar_url")
@@ -209,31 +218,50 @@ export default function ChatPage() {
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !user || !activeConversationId || sending) return;
+    if (!newMessage.trim() || !user || !activeConversationId) return;
 
     const content = newMessage.trim();
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
     setNewMessage("");
-    setSending(true);
 
     // Optimistic add
     const optimisticMsg: Message = {
-      id: `temp-${Date.now()}`,
+      id: tempId,
       content,
       sender_id: user.id,
       created_at: new Date().toISOString(),
       conversation_id: activeConversationId,
       profiles: null,
     };
+    setSendingIds((prev) => new Set(prev).add(tempId));
     setMessages((prev) => [...prev, optimisticMsg]);
 
-    await supabase.from("messages").insert({
-      content,
-      sender_id: user.id,
-      conversation_id: activeConversationId,
-    });
+    try {
+      const { data, error } = await supabase
+        .from("messages")
+        .insert({ content, sender_id: user.id, conversation_id: activeConversationId })
+        .select("id")
+        .single();
 
-    setSending(false);
-    fetchConversations();
+      if (error) throw error;
+
+      // Map temp to real id for dedup
+      tempToRealId.current.set(data.id, tempId);
+      setSendingIds((prev) => { const s = new Set(prev); s.delete(tempId); return s; });
+      setConfirmedIds((prev) => new Set(prev).add(tempId));
+
+      // Replace temp id with real id
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...m, id: data.id } : m))
+      );
+      setConfirmedIds((prev) => { const s = new Set(prev); s.delete(tempId); s.add(data.id); return s; });
+      fetchConversations();
+    } catch (err) {
+      // Rollback on error
+      setSendingIds((prev) => { const s = new Set(prev); s.delete(tempId); return s; });
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      console.error("Xabar yuborishda xatolik:", err);
+    }
   };
 
   const getInitials = (name: string) => name.slice(0, 2).toUpperCase();
@@ -458,8 +486,8 @@ export default function ChatPage() {
                             {formatTime(msg.created_at)}
                           </span>
                           {isOwn && (
-                            <span className="text-primary/70">
-                              {isTemp ? (
+                            <span className={sendingIds.has(msg.id) ? "text-muted-foreground/40" : "text-primary/70"}>
+                              {sendingIds.has(msg.id) ? (
                                 <Check className="h-3 w-3" />
                               ) : (
                                 <CheckCheck className="h-3 w-3" />
@@ -487,7 +515,7 @@ export default function ChatPage() {
                 />
                 <button
                   type="submit"
-                  disabled={!newMessage.trim() || sending}
+                  disabled={!newMessage.trim()}
                   className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:shadow-[0_0_20px_-4px_hsl(45_93%_58%/0.4)] active:scale-95 disabled:opacity-30 disabled:shadow-none"
                 >
                   <Send className="h-4 w-4" />
