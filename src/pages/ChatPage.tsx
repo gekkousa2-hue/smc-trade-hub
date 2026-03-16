@@ -50,8 +50,10 @@ export default function ChatPage() {
   const [searchResults, setSearchResults] = useState<Profile[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
-  const [sending, setSending] = useState(false);
+  const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
+  const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
+  const tempToRealId = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
