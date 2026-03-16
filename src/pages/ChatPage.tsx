@@ -486,8 +486,8 @@ export default function ChatPage() {
                             {formatTime(msg.created_at)}
                           </span>
                           {isOwn && (
-                            <span className="text-primary/70">
-                              {isTemp ? (
+                            <span className={sendingIds.has(msg.id) ? "text-muted-foreground/40" : "text-primary/70"}>
+                              {sendingIds.has(msg.id) ? (
                                 <Check className="h-3 w-3" />
                               ) : (
                                 <CheckCheck className="h-3 w-3" />
