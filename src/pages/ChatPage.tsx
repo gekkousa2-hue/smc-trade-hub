@@ -211,31 +211,50 @@ export default function ChatPage() {
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !user || !activeConversationId || sending) return;
+    if (!newMessage.trim() || !user || !activeConversationId) return;
 
     const content = newMessage.trim();
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
     setNewMessage("");
-    setSending(true);
 
     // Optimistic add
     const optimisticMsg: Message = {
-      id: `temp-${Date.now()}`,
+      id: tempId,
       content,
       sender_id: user.id,
       created_at: new Date().toISOString(),
       conversation_id: activeConversationId,
       profiles: null,
     };
+    setSendingIds((prev) => new Set(prev).add(tempId));
     setMessages((prev) => [...prev, optimisticMsg]);
 
-    await supabase.from("messages").insert({
-      content,
-      sender_id: user.id,
-      conversation_id: activeConversationId,
-    });
+    try {
+      const { data, error } = await supabase
+        .from("messages")
+        .insert({ content, sender_id: user.id, conversation_id: activeConversationId })
+        .select("id")
+        .single();
 
-    setSending(false);
-    fetchConversations();
+      if (error) throw error;
+
+      // Map temp to real id for dedup
+      tempToRealId.current.set(data.id, tempId);
+      setSendingIds((prev) => { const s = new Set(prev); s.delete(tempId); return s; });
+      setConfirmedIds((prev) => new Set(prev).add(tempId));
+
+      // Replace temp id with real id
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...m, id: data.id } : m))
+      );
+      setConfirmedIds((prev) => { const s = new Set(prev); s.delete(tempId); s.add(data.id); return s; });
+      fetchConversations();
+    } catch (err) {
+      // Rollback on error
+      setSendingIds((prev) => { const s = new Set(prev); s.delete(tempId); return s; });
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      console.error("Xabar yuborishda xatolik:", err);
+    }
   };
 
   const getInitials = (name: string) => name.slice(0, 2).toUpperCase();
