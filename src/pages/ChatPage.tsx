@@ -19,9 +19,13 @@ import {
   Image as ImageIcon,
   FileText,
   Video,
+  Bot,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface Profile {
   user_id: string;
@@ -49,6 +53,19 @@ interface Message {
   media_url?: string | null;
   media_type?: string | null;
   profiles?: { username: string; avatar_url: string | null } | null;
+  isAI?: boolean;
+  aiAnalysis?: AIAnalysis | null;
+  isAIThinking?: boolean;
+}
+
+interface AIAnalysis {
+  raw: string;
+  signal?: string;
+  structure?: string;
+  recommendation?: string;
+  entry?: string;
+  target?: string;
+  stopLoss?: string;
 }
 
 const EMOJI_LIST = [
@@ -56,6 +73,31 @@ const EMOJI_LIST = [
   "👎","🔥","💰","📈","📉","💎","🚀","💪","🎯","⚡",
   "✅","❌","⭐","💥","🏆","🤝","👏","🙏","💵","📊",
 ];
+
+const TRADE_AI_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/trade-ai`;
+
+function parseAIAnalysis(raw: string): AIAnalysis {
+  const analysis: AIAnalysis = { raw };
+  const signalMatch = raw.match(/Signal[:\s]*\*?\*?\s*(BUY|SELL|WAIT|Buy|Sell|Wait)/i);
+  if (signalMatch) analysis.signal = signalMatch[1].toUpperCase();
+
+  const structMatch = raw.match(/SMC Struktura[:\s]*\*?\*?\s*(.+?)(?:\n|$)/i);
+  if (structMatch) analysis.structure = structMatch[1].replace(/\*+/g, "").trim();
+
+  const recMatch = raw.match(/Tavsiya[:\s]*\*?\*?\s*(.+?)(?:\n|$)/i);
+  if (recMatch) analysis.recommendation = recMatch[1].replace(/\*+/g, "").trim();
+
+  const entryMatch = raw.match(/Kirish nuqtasi[:\s]*\*?\*?\s*(.+?)(?:\n|$)/i);
+  if (entryMatch) analysis.entry = entryMatch[1].replace(/\*+/g, "").trim();
+
+  const targetMatch = raw.match(/Target[:\s]*\*?\*?\s*(.+?)(?:\n|$)/i);
+  if (targetMatch) analysis.target = targetMatch[1].replace(/\*+/g, "").trim();
+
+  const slMatch = raw.match(/Stop Loss[:\s]*\*?\*?\s*(.+?)(?:\n|$)/i);
+  if (slMatch) analysis.stopLoss = slMatch[1].replace(/\*+/g, "").trim();
+
+  return analysis;
+}
 
 function AudioPlayer({ src }: { src: string }) {
   const [playing, setPlaying] = useState(false);
@@ -130,6 +172,91 @@ function VideoMessage({ src }: { src: string }) {
   );
 }
 
+function AIAnalysisCard({ analysis }: { analysis: AIAnalysis }) {
+  const signalColor = analysis.signal === "BUY"
+    ? "text-[hsl(142_60%_50%)]"
+    : analysis.signal === "SELL"
+    ? "text-destructive"
+    : "text-primary";
+
+  const signalBg = analysis.signal === "BUY"
+    ? "bg-[hsl(142_60%_50%)]/10 border-[hsl(142_60%_50%)]/30"
+    : analysis.signal === "SELL"
+    ? "bg-destructive/10 border-destructive/30"
+    : "bg-primary/10 border-primary/30";
+
+  return (
+    <Card className="bg-background/60 backdrop-blur-md border-primary/20 overflow-hidden">
+      <div className="h-1 bg-gradient-to-r from-primary via-primary/60 to-transparent" />
+      <CardContent className="p-3.5 space-y-2.5">
+        {analysis.signal && (
+          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-bold ${signalBg} ${signalColor}`}>
+            📊 Signal: {analysis.signal}
+          </div>
+        )}
+        {analysis.structure && (
+          <div className="space-y-0.5">
+            <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">🏗 SMC Struktura</p>
+            <p className="text-sm text-foreground">{analysis.structure}</p>
+          </div>
+        )}
+        {analysis.recommendation && (
+          <div className="space-y-0.5">
+            <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">💡 Tavsiya</p>
+            <p className="text-sm text-foreground">{analysis.recommendation}</p>
+          </div>
+        )}
+        {analysis.entry && (
+          <div className="space-y-0.5">
+            <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">📈 Kirish nuqtasi</p>
+            <p className="text-sm text-foreground font-mono">{analysis.entry}</p>
+          </div>
+        )}
+        <div className="flex gap-3">
+          {analysis.target && (
+            <div className="flex-1 space-y-0.5">
+              <p className="text-[10px] font-mono text-[hsl(142_60%_50%)] uppercase tracking-wider">🎯 Target</p>
+              <p className="text-sm text-foreground font-mono">{analysis.target}</p>
+            </div>
+          )}
+          {analysis.stopLoss && (
+            <div className="flex-1 space-y-0.5">
+              <p className="text-[10px] font-mono text-destructive uppercase tracking-wider">🛡 Stop Loss</p>
+              <p className="text-sm text-foreground font-mono">{analysis.stopLoss}</p>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AIThinkingBubble() {
+  return (
+    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
+      <div className="max-w-[78%] flex items-start gap-2">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/60 shadow-[0_0_12px_-2px_hsl(var(--primary)/0.4)]">
+          <Bot className="h-4 w-4 text-primary-foreground" />
+        </div>
+        <div className="flex flex-col items-start">
+          <span className="text-[10px] font-mono text-primary/80 mb-0.5 font-bold">Trade-AI</span>
+          <div className="rounded-2xl rounded-bl-sm bg-secondary/70 border border-border/40 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 text-primary animate-spin" />
+              <span className="text-sm text-muted-foreground">O'ylamoqda...</span>
+              <div className="flex gap-0.5">
+                <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0 }} className="h-1.5 w-1.5 rounded-full bg-primary" />
+                <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0.3 }} className="h-1.5 w-1.5 rounded-full bg-primary" />
+                <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0.6 }} className="h-1.5 w-1.5 rounded-full bg-primary" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 export default function ChatPage() {
   const [user, setUser] = useState<User | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -147,6 +274,9 @@ export default function ChatPage() {
   const [recordingType, setRecordingType] = useState<"audio" | "video" | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [aiMode, setAiMode] = useState(false);
+  const [aiThinking, setAiThinking] = useState(false);
+  const [aiImageUrl, setAiImageUrl] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const tempToRealId = useRef<Map<string, string>>(new Map());
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -155,6 +285,7 @@ export default function ChatPage() {
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const aiFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
@@ -214,7 +345,7 @@ export default function ChatPage() {
     return () => { supabase.removeChannel(channel); };
   }, [user, fetchConversations]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, aiThinking]);
 
   useEffect(() => {
     if (!searchQuery.trim() || !user) { setSearchResults([]); return; }
@@ -277,6 +408,75 @@ export default function ChatPage() {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       console.error("Xabar yuborishda xatolik:", err);
     }
+  };
+
+  const sendAIRequest = async (imageUrl?: string, textMessage?: string) => {
+    if (!user) return;
+    setAiThinking(true);
+    setAiMode(false);
+    setAiImageUrl(null);
+
+    try {
+      const resp = await fetch(TRADE_AI_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ imageUrl, message: textMessage }),
+      });
+
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({ error: "Xatolik" }));
+        throw new Error(errData.error || "AI xizmati xatosi");
+      }
+
+      const data = await resp.json();
+      const analysis = parseAIAnalysis(data.content);
+
+      const aiMsg: Message = {
+        id: `ai-${Date.now()}`,
+        content: data.content,
+        sender_id: "trade-ai",
+        created_at: new Date().toISOString(),
+        conversation_id: activeConversationId,
+        isAI: true,
+        aiAnalysis: analysis,
+      };
+      setMessages((prev) => [...prev, aiMsg]);
+    } catch (err) {
+      console.error("AI error:", err);
+      const errMsg: Message = {
+        id: `ai-err-${Date.now()}`,
+        content: `⚠️ ${err instanceof Error ? err.message : "AI xizmati bilan bog'lanishda xatolik"}`,
+        sender_id: "trade-ai",
+        created_at: new Date().toISOString(),
+        conversation_id: activeConversationId,
+        isAI: true,
+      };
+      setMessages((prev) => [...prev, errMsg]);
+    } finally {
+      setAiThinking(false);
+    }
+  };
+
+  const handleAIImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    const ext = file.name.split(".").pop() || "png";
+    const url = await uploadMedia(file, ext);
+    if (url) {
+      setAiImageUrl(url);
+    }
+    if (aiFileInputRef.current) aiFileInputRef.current.value = "";
+  };
+
+  const handleAISend = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const text = newMessage.trim();
+    if (!text && !aiImageUrl) return;
+    setNewMessage("");
+    await sendAIRequest(aiImageUrl || undefined, text || undefined);
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -358,6 +558,8 @@ export default function ChatPage() {
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
 
   const renderMessageContent = (msg: Message) => {
+    if (msg.aiAnalysis) return <AIAnalysisCard analysis={msg.aiAnalysis} />;
+    if (msg.isAI) return <p className="text-sm">{msg.content}</p>;
     if (msg.media_type === "audio" && msg.media_url) return <AudioPlayer src={msg.media_url} />;
     if (msg.media_type === "video" && msg.media_url) return <VideoMessage src={msg.media_url} />;
     if (msg.media_type === "image" && msg.media_url) return (
@@ -465,6 +667,28 @@ export default function ChatPage() {
               <AnimatePresence initial={false}>
                 {messages.map((msg) => {
                   const isOwn = msg.sender_id === user?.id;
+                  const isAI = msg.isAI || msg.sender_id === "trade-ai";
+
+                  if (isAI) {
+                    return (
+                      <motion.div key={msg.id} initial={{ opacity: 0, y: 6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.15 }}
+                        className="flex justify-start">
+                        <div className="max-w-[85%] flex items-start gap-2">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/60 shadow-[0_0_12px_-2px_hsl(var(--primary)/0.4)]">
+                            <Bot className="h-4 w-4 text-primary-foreground" />
+                          </div>
+                          <div className="flex flex-col items-start flex-1">
+                            <span className="text-[10px] font-mono text-primary/80 mb-0.5 font-bold">Trade-AI</span>
+                            <div className="w-full">
+                              {renderMessageContent(msg)}
+                            </div>
+                            <span className="font-mono text-[10px] text-muted-foreground/50 mt-0.5">{formatTime(msg.created_at)}</span>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  }
+
                   return (
                     <motion.div key={msg.id} initial={{ opacity: 0, y: 6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.12 }}
                       className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
@@ -489,6 +713,7 @@ export default function ChatPage() {
                   );
                 })}
               </AnimatePresence>
+              {aiThinking && <AIThinkingBubble />}
               <div ref={bottomRef} />
             </div>
 
@@ -538,13 +763,46 @@ export default function ChatPage() {
               )}
             </AnimatePresence>
 
+            {/* AI mode image preview */}
+            <AnimatePresence>
+              {aiMode && aiImageUrl && (
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
+                  className="border-t border-border/30 bg-secondary/90 backdrop-blur-sm px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <img src={aiImageUrl} alt="AI uchun rasm" className="h-16 w-16 rounded-lg object-cover border border-primary/30" />
+                      <button onClick={() => setAiImageUrl(null)} className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive flex items-center justify-center">
+                        <X className="h-3 w-3 text-white" />
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Grafik rasm yuklandi. Xabar yozing yoki to'g'ridan-to'g'ri tahlil uchun yuboring.</p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* AI mode banner */}
+            <AnimatePresence>
+              {aiMode && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                  className="border-t border-primary/30 bg-primary/5 backdrop-blur-sm px-4 py-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Bot className="h-4 w-4 text-primary" />
+                    <span className="text-xs font-mono text-primary font-bold">Trade-AI Tahlil Rejimi</span>
+                  </div>
+                  <button onClick={() => { setAiMode(false); setAiImageUrl(null); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors">Bekor qilish</button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Input */}
             <div className="glass border-t border-border/30 px-3 py-2.5 relative">
               <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" />
+              <input type="file" ref={aiFileInputRef} className="hidden" onChange={handleAIImageSelect} accept="image/*" />
 
               {/* Attach menu */}
               <AnimatePresence>
-                {showAttachMenu && (
+                {showAttachMenu && !aiMode && (
                   <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
                     className="absolute bottom-full left-3 mb-2 flex gap-2 p-2 rounded-xl glass border border-border/40">
                     <button onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false); }}
@@ -566,19 +824,51 @@ export default function ChatPage() {
                 )}
               </AnimatePresence>
 
-              <form onSubmit={sendMessage} className="flex items-center gap-1.5">
-                <button type="button" onClick={() => { setShowAttachMenu(!showAttachMenu); setShowEmoji(false); }}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-primary hover:bg-primary/10 active:scale-95">
-                  <Paperclip className="h-4.5 w-4.5" />
+              <form onSubmit={aiMode ? handleAISend : sendMessage} className="flex items-center gap-1.5">
+                {/* AI button */}
+                <button type="button" onClick={() => {
+                  setAiMode(!aiMode);
+                  setShowAttachMenu(false);
+                  setShowEmoji(false);
+                  if (!aiMode) setAiImageUrl(null);
+                }}
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all active:scale-95 ${
+                    aiMode
+                      ? "bg-primary text-primary-foreground shadow-[0_0_16px_-3px_hsl(var(--primary)/0.5)]"
+                      : "text-muted-foreground hover:text-primary hover:bg-primary/10"
+                  }`}>
+                  <Sparkles className="h-4.5 w-4.5" />
                 </button>
+
+                {!aiMode ? (
+                  <button type="button" onClick={() => { setShowAttachMenu(!showAttachMenu); setShowEmoji(false); }}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-primary hover:bg-primary/10 active:scale-95">
+                    <Paperclip className="h-4.5 w-4.5" />
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => aiFileInputRef.current?.click()}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-primary hover:bg-primary/10 active:scale-95">
+                    <ImageIcon className="h-4.5 w-4.5" />
+                  </button>
+                )}
+
                 <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Xabar yozing..."
+                  placeholder={aiMode ? "Grafikni tahlil qilish uchun rasm yuklang yoki savol yozing..." : "Xabar yozing..."}
                   className="flex-1 rounded-xl bg-secondary/80 px-4 py-2.5 text-sm text-foreground outline-none ring-1 ring-border/50 transition-all focus:ring-primary/50 focus:bg-secondary placeholder:text-muted-foreground" />
-                <button type="button" onClick={() => { setShowEmoji(!showEmoji); setShowAttachMenu(false); }}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-primary hover:bg-primary/10 active:scale-95">
-                  <Smile className="h-4.5 w-4.5" />
-                </button>
-                {newMessage.trim() ? (
+
+                {!aiMode && (
+                  <button type="button" onClick={() => { setShowEmoji(!showEmoji); setShowAttachMenu(false); }}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-primary hover:bg-primary/10 active:scale-95">
+                    <Smile className="h-4.5 w-4.5" />
+                  </button>
+                )}
+
+                {aiMode ? (
+                  <button type="submit" disabled={aiThinking || (!newMessage.trim() && !aiImageUrl)}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:shadow-[0_0_20px_-4px_hsl(var(--primary)/0.4)] active:scale-95 disabled:opacity-50">
+                    {aiThinking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
+                  </button>
+                ) : newMessage.trim() ? (
                   <button type="submit"
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:shadow-[0_0_20px_-4px_hsl(var(--primary)/0.4)] active:scale-95">
                     <Send className="h-4 w-4" />
