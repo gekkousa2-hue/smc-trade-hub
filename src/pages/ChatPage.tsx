@@ -12,20 +12,15 @@ import {
   MessagesSquare,
   Paperclip,
   Mic,
-  MicOff,
   Smile,
   Play,
   Pause,
   Image as ImageIcon,
   FileText,
   Video,
-  Bot,
-  Sparkles,
-  Loader2,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Card, CardContent } from "@/components/ui/card";
 
 interface Profile {
   user_id: string;
@@ -53,19 +48,6 @@ interface Message {
   media_url?: string | null;
   media_type?: string | null;
   profiles?: { username: string; avatar_url: string | null } | null;
-  isAI?: boolean;
-  aiAnalysis?: AIAnalysis | null;
-  isAIThinking?: boolean;
-}
-
-interface AIAnalysis {
-  raw: string;
-  signal?: string;
-  structure?: string;
-  recommendation?: string;
-  entry?: string;
-  target?: string;
-  stopLoss?: string;
 }
 
 const EMOJI_LIST = [
@@ -74,30 +56,7 @@ const EMOJI_LIST = [
   "✅","❌","⭐","💥","🏆","🤝","👏","🙏","💵","📊",
 ];
 
-const TRADE_AI_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/trade-ai`;
-
-function parseAIAnalysis(raw: string): AIAnalysis {
-  const analysis: AIAnalysis = { raw };
-  const signalMatch = raw.match(/Signal[:\s]*\*?\*?\s*(BUY|SELL|WAIT|Buy|Sell|Wait)/i);
-  if (signalMatch) analysis.signal = signalMatch[1].toUpperCase();
-
-  const structMatch = raw.match(/SMC Struktura[:\s]*\*?\*?\s*(.+?)(?:\n|$)/i);
-  if (structMatch) analysis.structure = structMatch[1].replace(/\*+/g, "").trim();
-
-  const recMatch = raw.match(/Tavsiya[:\s]*\*?\*?\s*(.+?)(?:\n|$)/i);
-  if (recMatch) analysis.recommendation = recMatch[1].replace(/\*+/g, "").trim();
-
-  const entryMatch = raw.match(/Kirish nuqtasi[:\s]*\*?\*?\s*(.+?)(?:\n|$)/i);
-  if (entryMatch) analysis.entry = entryMatch[1].replace(/\*+/g, "").trim();
-
-  const targetMatch = raw.match(/Target[:\s]*\*?\*?\s*(.+?)(?:\n|$)/i);
-  if (targetMatch) analysis.target = targetMatch[1].replace(/\*+/g, "").trim();
-
-  const slMatch = raw.match(/Stop Loss[:\s]*\*?\*?\s*(.+?)(?:\n|$)/i);
-  if (slMatch) analysis.stopLoss = slMatch[1].replace(/\*+/g, "").trim();
-
-  return analysis;
-}
+/* ─── Small reusable components ─── */
 
 function AudioPlayer({ src }: { src: string }) {
   const [playing, setPlaying] = useState(false);
@@ -123,7 +82,7 @@ function AudioPlayer({ src }: { src: string }) {
 
   const toggle = () => {
     if (!audioRef.current) return;
-    if (playing) { audioRef.current.pause(); } else { audioRef.current.play(); }
+    if (playing) audioRef.current.pause(); else audioRef.current.play();
     setPlaying(!playing);
   };
 
@@ -152,17 +111,14 @@ function AudioPlayer({ src }: { src: string }) {
 function VideoMessage({ src }: { src: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
-
   const toggle = () => {
     if (!videoRef.current) return;
-    if (playing) { videoRef.current.pause(); } else { videoRef.current.play(); }
+    if (playing) videoRef.current.pause(); else videoRef.current.play();
     setPlaying(!playing);
   };
-
   return (
-    <div className="relative w-40 h-40 rounded-full overflow-hidden cursor-pointer border-2 border-primary/40" onClick={toggle}>
-      <video ref={videoRef} src={src} className="w-full h-full object-cover" playsInline loop
-        onEnded={() => setPlaying(false)} />
+    <div className="relative w-36 h-36 rounded-full overflow-hidden cursor-pointer border-2 border-primary/40" onClick={toggle}>
+      <video ref={videoRef} src={src} className="w-full h-full object-cover" playsInline loop onEnded={() => setPlaying(false)} />
       {!playing && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/30">
           <Play className="h-8 w-8 text-primary drop-shadow" />
@@ -172,90 +128,7 @@ function VideoMessage({ src }: { src: string }) {
   );
 }
 
-function AIAnalysisCard({ analysis }: { analysis: AIAnalysis }) {
-  const signalColor = analysis.signal === "BUY"
-    ? "text-[hsl(142_60%_50%)]"
-    : analysis.signal === "SELL"
-    ? "text-destructive"
-    : "text-primary";
-
-  const signalBg = analysis.signal === "BUY"
-    ? "bg-[hsl(142_60%_50%)]/10 border-[hsl(142_60%_50%)]/30"
-    : analysis.signal === "SELL"
-    ? "bg-destructive/10 border-destructive/30"
-    : "bg-primary/10 border-primary/30";
-
-  return (
-    <Card className="bg-background/60 backdrop-blur-md border-primary/20 overflow-hidden">
-      <div className="h-1 bg-gradient-to-r from-primary via-primary/60 to-transparent" />
-      <CardContent className="p-3.5 space-y-2.5">
-        {analysis.signal && (
-          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-bold ${signalBg} ${signalColor}`}>
-            📊 Signal: {analysis.signal}
-          </div>
-        )}
-        {analysis.structure && (
-          <div className="space-y-0.5">
-            <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">🏗 SMC Struktura</p>
-            <p className="text-sm text-foreground">{analysis.structure}</p>
-          </div>
-        )}
-        {analysis.recommendation && (
-          <div className="space-y-0.5">
-            <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">💡 Tavsiya</p>
-            <p className="text-sm text-foreground">{analysis.recommendation}</p>
-          </div>
-        )}
-        {analysis.entry && (
-          <div className="space-y-0.5">
-            <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">📈 Kirish nuqtasi</p>
-            <p className="text-sm text-foreground font-mono">{analysis.entry}</p>
-          </div>
-        )}
-        <div className="flex gap-3">
-          {analysis.target && (
-            <div className="flex-1 space-y-0.5">
-              <p className="text-[10px] font-mono text-[hsl(142_60%_50%)] uppercase tracking-wider">🎯 Target</p>
-              <p className="text-sm text-foreground font-mono">{analysis.target}</p>
-            </div>
-          )}
-          {analysis.stopLoss && (
-            <div className="flex-1 space-y-0.5">
-              <p className="text-[10px] font-mono text-destructive uppercase tracking-wider">🛡 Stop Loss</p>
-              <p className="text-sm text-foreground font-mono">{analysis.stopLoss}</p>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function AIThinkingBubble() {
-  return (
-    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
-      <div className="max-w-[78%] flex items-start gap-2">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/60 shadow-[0_0_12px_-2px_hsl(var(--primary)/0.4)]">
-          <Bot className="h-4 w-4 text-primary-foreground" />
-        </div>
-        <div className="flex flex-col items-start">
-          <span className="text-[10px] font-mono text-primary/80 mb-0.5 font-bold">Trade-AI</span>
-          <div className="rounded-2xl rounded-bl-sm bg-secondary/70 border border-border/40 px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 text-primary animate-spin" />
-              <span className="text-sm text-muted-foreground">O'ylamoqda...</span>
-              <div className="flex gap-0.5">
-                <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0 }} className="h-1.5 w-1.5 rounded-full bg-primary" />
-                <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0.3 }} className="h-1.5 w-1.5 rounded-full bg-primary" />
-                <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0.6 }} className="h-1.5 w-1.5 rounded-full bg-primary" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
+/* ─── Main Component ─── */
 
 export default function ChatPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -274,9 +147,7 @@ export default function ChatPage() {
   const [recordingType, setRecordingType] = useState<"audio" | "video" | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
-  const [aiMode, setAiMode] = useState(false);
-  const [aiThinking, setAiThinking] = useState(false);
-  const [aiImageUrl, setAiImageUrl] = useState<string | null>(null);
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const tempToRealId = useRef<Map<string, string>>(new Map());
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -285,12 +156,13 @@ export default function ChatPage() {
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const aiFileInputRef = useRef<HTMLInputElement>(null);
 
+  /* ─── Auth ─── */
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
   }, []);
 
+  /* ─── Conversations ─── */
   const fetchConversations = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
@@ -305,10 +177,13 @@ export default function ChatPage() {
         const { data: profile } = await supabase.from("profiles").select("user_id, username, avatar_url").eq("user_id", otherUserId).single();
         const { data: lastMsg } = await supabase.from("messages").select("content, created_at, media_type").eq("conversation_id", conv.id).order("created_at", { ascending: false }).limit(1).single();
         let lastMsgText = lastMsg?.content;
-        if (lastMsg && (lastMsg as any).media_type === "audio") lastMsgText = "🎤 Ovozli xabar";
-        else if (lastMsg && (lastMsg as any).media_type === "video") lastMsgText = "🎥 Video xabar";
-        else if (lastMsg && (lastMsg as any).media_type === "image") lastMsgText = "📷 Rasm";
-        else if (lastMsg && (lastMsg as any).media_type === "file") lastMsgText = "📎 Fayl";
+        if (lastMsg) {
+          const mt = (lastMsg as any).media_type;
+          if (mt === "audio") lastMsgText = "🎤 Ovozli xabar";
+          else if (mt === "video") lastMsgText = "🎥 Video xabar";
+          else if (mt === "image") lastMsgText = "📷 Rasm";
+          else if (mt === "file") lastMsgText = "📎 Fayl";
+        }
         return { ...conv, other_user: profile || undefined, last_message: lastMsgText, last_message_at: lastMsg?.created_at } as Conversation;
       })
     );
@@ -317,51 +192,89 @@ export default function ChatPage() {
 
   useEffect(() => { fetchConversations(); }, [fetchConversations]);
 
+  /* ─── Messages fetch ─── */
   useEffect(() => {
     if (!activeConversationId) { setMessages([]); return; }
     const fetchMessages = async () => {
-      const { data } = await supabase.from("messages").select("*, profiles(username, avatar_url)").eq("conversation_id", activeConversationId).order("created_at", { ascending: true }).limit(200);
+      const { data } = await supabase
+        .from("messages")
+        .select("*, profiles(username, avatar_url)")
+        .eq("conversation_id", activeConversationId)
+        .order("created_at", { ascending: true })
+        .limit(200);
       if (data) setMessages(data as Message[]);
     };
     fetchMessages();
   }, [activeConversationId]);
 
+  /* ─── Real-time messages ─── */
   useEffect(() => {
     if (!activeConversationId) return;
-    const channel = supabase.channel(`messages-${activeConversationId}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${activeConversationId}` }, async (payload) => {
-      const newId = payload.new.id as string;
-      if (tempToRealId.current.has(newId)) { tempToRealId.current.delete(newId); return; }
-      const { data: profile } = await supabase.from("profiles").select("username, avatar_url").eq("user_id", payload.new.sender_id).single();
-      const newMsg: Message = { ...(payload.new as Message), profiles: profile };
-      setMessages((prev) => { if (prev.some((m) => m.id === newMsg.id)) return prev; return [...prev, newMsg]; });
-      fetchConversations();
-    }).subscribe();
+    const channel = supabase
+      .channel(`messages-${activeConversationId}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "messages",
+        filter: `conversation_id=eq.${activeConversationId}`,
+      }, async (payload) => {
+        const newId = payload.new.id as string;
+        if (tempToRealId.current.has(newId)) {
+          tempToRealId.current.delete(newId);
+          return;
+        }
+        const { data: profile } = await supabase.from("profiles").select("username, avatar_url").eq("user_id", payload.new.sender_id).single();
+        const newMsg: Message = { ...(payload.new as Message), profiles: profile };
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === newMsg.id)) return prev;
+          return [...prev, newMsg];
+        });
+        fetchConversations();
+      })
+      .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [activeConversationId, fetchConversations]);
 
+  /* ─── Real-time conversations ─── */
   useEffect(() => {
     if (!user) return;
-    const channel = supabase.channel("conversations-realtime").on("postgres_changes", { event: "INSERT", schema: "public", table: "conversations" }, () => fetchConversations()).subscribe();
+    const channel = supabase
+      .channel("conversations-realtime")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "conversations" }, () => fetchConversations())
+      .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user, fetchConversations]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, aiThinking]);
+  /* ─── Auto-scroll ─── */
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
+  /* ─── Search ─── */
   useEffect(() => {
     if (!searchQuery.trim() || !user) { setSearchResults([]); return; }
     const timeout = setTimeout(async () => {
-      const { data } = await supabase.from("profiles").select("user_id, username, avatar_url").ilike("username", `%${searchQuery}%`).neq("user_id", user.id).limit(10);
+      const { data } = await supabase
+        .from("profiles")
+        .select("user_id, username, avatar_url")
+        .ilike("username", `%${searchQuery}%`)
+        .neq("user_id", user.id)
+        .limit(10);
       setSearchResults(data || []);
     }, 300);
     return () => clearTimeout(timeout);
   }, [searchQuery, user]);
 
+  /* ─── Actions ─── */
   const openConversation = async (otherUserId: string) => {
     if (!user) return;
     const { data, error } = await supabase.rpc("get_or_create_conversation", { other_user_id: otherUserId });
     if (error) { console.error("Error:", error); return; }
     setActiveConversationId(data as string);
-    setSearchQuery(""); setSearchResults([]); setIsSearching(false); setShowSidebar(false);
+    setSearchQuery("");
+    setSearchResults([]);
+    setIsSearching(false);
+    setShowSidebar(false);
     fetchConversations();
   };
 
@@ -385,9 +298,14 @@ export default function ChatPage() {
     setShowEmoji(false);
 
     const optimisticMsg: Message = {
-      id: tempId, content: content || (mediaType === "audio" ? "🎤" : mediaType === "video" ? "🎥" : "📎"),
-      sender_id: user.id, created_at: new Date().toISOString(), conversation_id: activeConversationId,
-      media_url: mediaUrl, media_type: mediaType, profiles: null,
+      id: tempId,
+      content: content || (mediaType === "audio" ? "🎤" : mediaType === "video" ? "🎥" : "📎"),
+      sender_id: user.id,
+      created_at: new Date().toISOString(),
+      conversation_id: activeConversationId,
+      media_url: mediaUrl,
+      media_type: mediaType,
+      profiles: null,
     };
     setSendingIds((prev) => new Set(prev).add(tempId));
     setMessages((prev) => [...prev, optimisticMsg]);
@@ -410,75 +328,6 @@ export default function ChatPage() {
     }
   };
 
-  const sendAIRequest = async (imageUrl?: string, textMessage?: string) => {
-    if (!user) return;
-    setAiThinking(true);
-    setAiMode(false);
-    setAiImageUrl(null);
-
-    try {
-      const resp = await fetch(TRADE_AI_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ imageUrl, message: textMessage }),
-      });
-
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({ error: "Xatolik" }));
-        throw new Error(errData.error || "AI xizmati xatosi");
-      }
-
-      const data = await resp.json();
-      const analysis = parseAIAnalysis(data.content);
-
-      const aiMsg: Message = {
-        id: `ai-${Date.now()}`,
-        content: data.content,
-        sender_id: "trade-ai",
-        created_at: new Date().toISOString(),
-        conversation_id: activeConversationId,
-        isAI: true,
-        aiAnalysis: analysis,
-      };
-      setMessages((prev) => [...prev, aiMsg]);
-    } catch (err) {
-      console.error("AI error:", err);
-      const errMsg: Message = {
-        id: `ai-err-${Date.now()}`,
-        content: `⚠️ ${err instanceof Error ? err.message : "AI xizmati bilan bog'lanishda xatolik"}`,
-        sender_id: "trade-ai",
-        created_at: new Date().toISOString(),
-        conversation_id: activeConversationId,
-        isAI: true,
-      };
-      setMessages((prev) => [...prev, errMsg]);
-    } finally {
-      setAiThinking(false);
-    }
-  };
-
-  const handleAIImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-    const ext = file.name.split(".").pop() || "png";
-    const url = await uploadMedia(file, ext);
-    if (url) {
-      setAiImageUrl(url);
-    }
-    if (aiFileInputRef.current) aiFileInputRef.current.value = "";
-  };
-
-  const handleAISend = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const text = newMessage.trim();
-    if (!text && !aiImageUrl) return;
-    setNewMessage("");
-    await sendAIRequest(aiImageUrl || undefined, text || undefined);
-  };
-
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
@@ -492,14 +341,18 @@ export default function ChatPage() {
 
   const startRecording = async (type: "audio" | "video") => {
     try {
-      const constraints: MediaStreamConstraints = type === "audio" ? { audio: true } : { audio: true, video: { facingMode: "user", width: 320, height: 320 } };
+      const constraints: MediaStreamConstraints = type === "audio"
+        ? { audio: true }
+        : { audio: true, video: { facingMode: "user", width: 320, height: 320 } };
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
       if (type === "video" && videoPreviewRef.current) {
         videoPreviewRef.current.srcObject = stream;
         videoPreviewRef.current.play();
       }
-      const recorder = new MediaRecorder(stream, { mimeType: type === "audio" ? "audio/webm" : "video/webm" });
+      const recorder = new MediaRecorder(stream, {
+        mimeType: type === "audio" ? "audio/webm" : "video/webm",
+      });
       chunksRef.current = [];
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.onstop = async () => {
@@ -547,25 +400,33 @@ export default function ChatPage() {
     streamRef.current = null;
   };
 
+  /* ─── Helpers ─── */
   const getInitials = (name: string) => name.slice(0, 2).toUpperCase();
   const getAvatarColor = (id: string) => {
-    const colors = ["from-primary/90 to-primary/50", "from-[hsl(142_60%_45%)] to-[hsl(142_60%_35%)]", "from-[hsl(210_80%_55%)] to-[hsl(210_80%_40%)]", "from-[hsl(270_60%_55%)] to-[hsl(270_60%_40%)]", "from-[hsl(330_60%_55%)] to-[hsl(330_60%_40%)]", "from-[hsl(20_80%_55%)] to-[hsl(20_80%_40%)]"];
+    const colors = [
+      "from-primary/90 to-primary/50",
+      "from-[hsl(142_60%_45%)] to-[hsl(142_60%_35%)]",
+      "from-[hsl(210_80%_55%)] to-[hsl(210_80%_40%)]",
+      "from-[hsl(270_60%_55%)] to-[hsl(270_60%_40%)]",
+      "from-[hsl(330_60%_55%)] to-[hsl(330_60%_40%)]",
+      "from-[hsl(20_80%_55%)] to-[hsl(20_80%_40%)]",
+    ];
     return colors[id.charCodeAt(0) % colors.length];
   };
-  const formatTime = (dateStr: string) => new Date(dateStr).toLocaleTimeString("uz", { hour: "2-digit", minute: "2-digit" });
-  const formatRecTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
+  const formatTime = (dateStr: string) =>
+    new Date(dateStr).toLocaleTimeString("uz", { hour: "2-digit", minute: "2-digit" });
+  const formatRecTime = (s: number) =>
+    `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
 
   const renderMessageContent = (msg: Message) => {
-    if (msg.aiAnalysis) return <AIAnalysisCard analysis={msg.aiAnalysis} />;
-    if (msg.isAI) return <p className="text-sm">{msg.content}</p>;
     if (msg.media_type === "audio" && msg.media_url) return <AudioPlayer src={msg.media_url} />;
     if (msg.media_type === "video" && msg.media_url) return <VideoMessage src={msg.media_url} />;
     if (msg.media_type === "image" && msg.media_url) return (
       <div className="space-y-1.5">
         <img src={msg.media_url} alt="media" className="rounded-xl max-w-[240px] max-h-[240px] object-cover" loading="lazy" />
-        {msg.content && <p>{msg.content}</p>}
+        {msg.content && msg.content !== "📎" && <p className="text-sm">{msg.content}</p>}
       </div>
     );
     if (msg.media_type === "file" && msg.media_url) return (
@@ -573,37 +434,59 @@ export default function ChatPage() {
         <FileText className="h-4 w-4" /> {msg.content || "Fayl"}
       </a>
     );
-    return <>{msg.content}</>;
+    return <span>{msg.content}</span>;
   };
 
+  /* ─── Render ─── */
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-background">
-      {/* Sidebar */}
+      {/* ─── Sidebar ─── */}
       <div className={`${showSidebar ? "flex" : "hidden md:flex"} w-full md:w-80 flex-col border-r border-border/30`}>
+        {/* Header */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border/30">
           <MessagesSquare className="h-5 w-5 text-primary" />
           <h1 className="font-display text-lg font-bold text-foreground">Xabarlar</h1>
         </div>
+
+        {/* Search */}
         <div className="px-3 py-2.5">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input type="text" value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setIsSearching(!!e.target.value); }}
-              placeholder="Treyderlarni qidirish..." className="w-full rounded-xl bg-secondary/80 pl-9 pr-8 py-2.5 text-sm text-foreground outline-none ring-1 ring-border/50 transition-all focus:ring-primary/50 focus:bg-secondary placeholder:text-muted-foreground" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setIsSearching(!!e.target.value); }}
+              placeholder="Treyderlarni qidirish..."
+              className="w-full rounded-xl bg-secondary/80 pl-9 pr-8 py-2.5 text-sm text-foreground outline-none ring-1 ring-border/50 transition-all focus:ring-primary/50 focus:bg-secondary placeholder:text-muted-foreground"
+            />
             {searchQuery && (
-              <button onClick={() => { setSearchQuery(""); setSearchResults([]); setIsSearching(false); }} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+              <button
+                onClick={() => { setSearchQuery(""); setSearchResults([]); setIsSearching(false); }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
                 <X className="h-4 w-4" />
               </button>
             )}
           </div>
         </div>
+
+        {/* List */}
         <ScrollArea className="flex-1">
           {isSearching ? (
             <div className="px-2 py-1">
               <p className="px-3 py-1.5 font-mono text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">Natijalar</p>
-              {searchResults.length === 0 && searchQuery.trim() && <p className="px-3 py-6 text-center text-sm text-muted-foreground">Hech narsa topilmadi</p>}
+              {searchResults.length === 0 && searchQuery.trim() && (
+                <p className="px-3 py-6 text-center text-sm text-muted-foreground">Hech narsa topilmadi</p>
+              )}
               {searchResults.map((profile) => (
-                <button key={profile.user_id} onClick={() => openConversation(profile.user_id)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition-all hover:bg-secondary/80 active:scale-[0.98]">
-                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${getAvatarColor(profile.user_id)}`}>{getInitials(profile.username)}</div>
+                <button
+                  key={profile.user_id}
+                  onClick={() => openConversation(profile.user_id)}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition-all hover:bg-secondary/80 active:scale-[0.98]"
+                >
+                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${getAvatarColor(profile.user_id)}`}>
+                    {getInitials(profile.username)}
+                  </div>
                   <div className="text-left">
                     <p className="text-sm font-medium text-foreground">{profile.username}</p>
                     <p className="text-xs text-primary/70 font-mono">Xabar yozish →</p>
@@ -623,13 +506,24 @@ export default function ChatPage() {
                 </div>
               ) : (
                 conversations.map((conv) => (
-                  <button key={conv.id} onClick={() => { setActiveConversationId(conv.id); setShowSidebar(false); }}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 mb-0.5 transition-all active:scale-[0.98] ${activeConversationId === conv.id ? "bg-primary/10 ring-1 ring-primary/20" : "hover:bg-secondary/60"}`}>
-                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${getAvatarColor(conv.other_user?.user_id || "")}`}>{getInitials(conv.other_user?.username || "?")}</div>
+                  <button
+                    key={conv.id}
+                    onClick={() => { setActiveConversationId(conv.id); setShowSidebar(false); }}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 mb-0.5 transition-all active:scale-[0.98] ${
+                      activeConversationId === conv.id
+                        ? "bg-primary/10 ring-1 ring-primary/20"
+                        : "hover:bg-secondary/60"
+                    }`}
+                  >
+                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${getAvatarColor(conv.other_user?.user_id || "")}`}>
+                      {getInitials(conv.other_user?.username || "?")}
+                    </div>
                     <div className="flex-1 min-w-0 text-left">
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-medium text-foreground truncate">{conv.other_user?.username || "Noma'lum"}</p>
-                        {conv.last_message_at && <span className="font-mono text-[10px] text-muted-foreground/60 ml-2 shrink-0">{formatTime(conv.last_message_at)}</span>}
+                        {conv.last_message_at && (
+                          <span className="font-mono text-[10px] text-muted-foreground/60 ml-2 shrink-0">{formatTime(conv.last_message_at)}</span>
+                        )}
                       </div>
                       {conv.last_message && <p className="text-xs text-muted-foreground truncate mt-0.5">{conv.last_message}</p>}
                     </div>
@@ -641,19 +535,24 @@ export default function ChatPage() {
         </ScrollArea>
       </div>
 
-      {/* Chat Area */}
+      {/* ─── Chat Area ─── */}
       <div className={`${!showSidebar ? "flex" : "hidden md:flex"} flex-1 flex-col`}>
         {activeConversationId && activeConversation ? (
           <>
-            {/* Header */}
-            <header className="glass sticky top-0 z-50 flex items-center gap-3 px-4 py-3 border-b border-border/30">
-              <button onClick={() => setShowSidebar(true)} className="flex md:hidden h-8 w-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground transition-colors hover:text-foreground active:scale-95">
+            {/* Chat Header */}
+            <header className="glass sticky top-0 z-40 flex items-center gap-3 px-4 py-3 border-b border-border/30">
+              <button
+                onClick={() => setShowSidebar(true)}
+                className="flex md:hidden h-8 w-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground transition-colors hover:text-foreground active:scale-95"
+              >
                 <ArrowLeft className="h-4 w-4" />
               </button>
-              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${getAvatarColor(activeConversation.other_user?.user_id || "")}`}>{getInitials(activeConversation.other_user?.username || "?")}</div>
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${getAvatarColor(activeConversation.other_user?.user_id || "")}`}>
+                {getInitials(activeConversation.other_user?.username || "?")}
+              </div>
               <div>
                 <h2 className="font-display text-sm font-bold text-foreground">{activeConversation.other_user?.username || "Noma'lum"}</h2>
-                <p className="font-mono text-[10px] text-primary/60">Trader</p>
+                <p className="font-mono text-[10px] text-primary/60">Online</p>
               </div>
             </header>
 
@@ -661,37 +560,23 @@ export default function ChatPage() {
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2.5">
               {messages.length === 0 && (
                 <div className="flex h-full items-center justify-center">
-                  <div className="text-center"><p className="text-2xl mb-2">👋</p><p className="text-sm text-muted-foreground">Salomlashing va suhbatni boshlang!</p></div>
+                  <div className="text-center">
+                    <p className="text-2xl mb-2">👋</p>
+                    <p className="text-sm text-muted-foreground">Salomlashing va suhbatni boshlang!</p>
+                  </div>
                 </div>
               )}
               <AnimatePresence initial={false}>
                 {messages.map((msg) => {
                   const isOwn = msg.sender_id === user?.id;
-                  const isAI = msg.isAI || msg.sender_id === "trade-ai";
-
-                  if (isAI) {
-                    return (
-                      <motion.div key={msg.id} initial={{ opacity: 0, y: 6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.15 }}
-                        className="flex justify-start">
-                        <div className="max-w-[85%] flex items-start gap-2">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/60 shadow-[0_0_12px_-2px_hsl(var(--primary)/0.4)]">
-                            <Bot className="h-4 w-4 text-primary-foreground" />
-                          </div>
-                          <div className="flex flex-col items-start flex-1">
-                            <span className="text-[10px] font-mono text-primary/80 mb-0.5 font-bold">Trade-AI</span>
-                            <div className="w-full">
-                              {renderMessageContent(msg)}
-                            </div>
-                            <span className="font-mono text-[10px] text-muted-foreground/50 mt-0.5">{formatTime(msg.created_at)}</span>
-                          </div>
-                        </div>
-                      </motion.div>
-                    );
-                  }
-
                   return (
-                    <motion.div key={msg.id} initial={{ opacity: 0, y: 6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.12 }}
-                      className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
+                    <motion.div
+                      key={msg.id}
+                      initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ duration: 0.12 }}
+                      className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
+                    >
                       <div className={`max-w-[78%] flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
                         <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed backdrop-blur-sm ${
                           isOwn
@@ -713,15 +598,18 @@ export default function ChatPage() {
                   );
                 })}
               </AnimatePresence>
-              {aiThinking && <AIThinkingBubble />}
               <div ref={bottomRef} />
             </div>
 
-            {/* Recording overlay */}
+            {/* Recording Overlay */}
             <AnimatePresence>
               {isRecording && (
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
-                  className="absolute bottom-16 left-0 right-0 flex flex-col items-center justify-center gap-3 p-6 glass border-t border-border/30 z-50">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  className="absolute bottom-16 left-0 right-0 flex flex-col items-center justify-center gap-3 p-6 glass border-t border-border/30 z-50"
+                >
                   {recordingType === "video" && (
                     <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-destructive/60 animate-pulse">
                       <video ref={videoPreviewRef} className="w-full h-full object-cover" muted playsInline />
@@ -746,15 +634,22 @@ export default function ChatPage() {
               )}
             </AnimatePresence>
 
-            {/* Emoji panel */}
+            {/* Emoji Panel */}
             <AnimatePresence>
               {showEmoji && (
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
-                  className="border-t border-border/30 bg-secondary/90 backdrop-blur-sm px-4 py-3">
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  className="border-t border-border/30 bg-secondary/90 backdrop-blur-sm px-4 py-3"
+                >
                   <div className="flex flex-wrap gap-1.5">
                     {EMOJI_LIST.map((em) => (
-                      <button key={em} onClick={() => setNewMessage((prev) => prev + em)}
-                        className="h-9 w-9 flex items-center justify-center text-lg rounded-lg hover:bg-primary/10 active:scale-90 transition-all">
+                      <button
+                        key={em}
+                        onClick={() => setNewMessage((prev) => prev + em)}
+                        className="h-9 w-9 flex items-center justify-center text-lg rounded-lg hover:bg-primary/10 active:scale-90 transition-all"
+                      >
                         {em}
                       </button>
                     ))}
@@ -763,60 +658,37 @@ export default function ChatPage() {
               )}
             </AnimatePresence>
 
-            {/* AI mode image preview */}
-            <AnimatePresence>
-              {aiMode && aiImageUrl && (
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
-                  className="border-t border-border/30 bg-secondary/90 backdrop-blur-sm px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <img src={aiImageUrl} alt="AI uchun rasm" className="h-16 w-16 rounded-lg object-cover border border-primary/30" />
-                      <button onClick={() => setAiImageUrl(null)} className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive flex items-center justify-center">
-                        <X className="h-3 w-3 text-white" />
-                      </button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Grafik rasm yuklandi. Xabar yozing yoki to'g'ridan-to'g'ri tahlil uchun yuboring.</p>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* AI mode banner */}
-            <AnimatePresence>
-              {aiMode && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
-                  className="border-t border-primary/30 bg-primary/5 backdrop-blur-sm px-4 py-2 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Bot className="h-4 w-4 text-primary" />
-                    <span className="text-xs font-mono text-primary font-bold">Trade-AI Tahlil Rejimi</span>
-                  </div>
-                  <button onClick={() => { setAiMode(false); setAiImageUrl(null); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors">Bekor qilish</button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Input */}
+            {/* Input Bar */}
             <div className="glass border-t border-border/30 px-3 py-2.5 relative">
               <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" />
-              <input type="file" ref={aiFileInputRef} className="hidden" onChange={handleAIImageSelect} accept="image/*" />
 
-              {/* Attach menu */}
+              {/* Attach Menu */}
               <AnimatePresence>
-                {showAttachMenu && !aiMode && (
-                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
-                    className="absolute bottom-full left-3 mb-2 flex gap-2 p-2 rounded-xl glass border border-border/40">
-                    <button onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false); }}
-                      className="flex flex-col items-center gap-1 p-2.5 rounded-xl hover:bg-primary/10 transition-colors">
+                {showAttachMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                    className="absolute bottom-full left-3 mb-2 flex gap-2 p-2 rounded-xl glass border border-border/40"
+                  >
+                    <button
+                      onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false); }}
+                      className="flex flex-col items-center gap-1 p-2.5 rounded-xl hover:bg-primary/10 transition-colors"
+                    >
                       <ImageIcon className="h-5 w-5 text-primary" />
                       <span className="text-[10px] text-muted-foreground">Rasm</span>
                     </button>
-                    <button onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false); }}
-                      className="flex flex-col items-center gap-1 p-2.5 rounded-xl hover:bg-primary/10 transition-colors">
+                    <button
+                      onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false); }}
+                      className="flex flex-col items-center gap-1 p-2.5 rounded-xl hover:bg-primary/10 transition-colors"
+                    >
                       <FileText className="h-5 w-5 text-[hsl(210_80%_55%)]" />
                       <span className="text-[10px] text-muted-foreground">Fayl</span>
                     </button>
-                    <button onClick={() => { startRecording("video"); setShowAttachMenu(false); }}
-                      className="flex flex-col items-center gap-1 p-2.5 rounded-xl hover:bg-primary/10 transition-colors">
+                    <button
+                      onClick={() => { startRecording("video"); setShowAttachMenu(false); }}
+                      className="flex flex-col items-center gap-1 p-2.5 rounded-xl hover:bg-primary/10 transition-colors"
+                    >
                       <Video className="h-5 w-5 text-[hsl(330_60%_55%)]" />
                       <span className="text-[10px] text-muted-foreground">Video</span>
                     </button>
@@ -824,58 +696,44 @@ export default function ChatPage() {
                 )}
               </AnimatePresence>
 
-              <form onSubmit={aiMode ? handleAISend : sendMessage} className="flex items-center gap-1.5">
-                {/* AI button */}
-                <button type="button" onClick={() => {
-                  setAiMode(!aiMode);
-                  setShowAttachMenu(false);
-                  setShowEmoji(false);
-                  if (!aiMode) setAiImageUrl(null);
-                }}
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all active:scale-95 ${
-                    aiMode
-                      ? "bg-primary text-primary-foreground shadow-[0_0_16px_-3px_hsl(var(--primary)/0.5)]"
-                      : "text-muted-foreground hover:text-primary hover:bg-primary/10"
-                  }`}>
-                  <Sparkles className="h-4.5 w-4.5" />
+              <form onSubmit={sendMessage} className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => { setShowAttachMenu(!showAttachMenu); setShowEmoji(false); }}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-primary hover:bg-primary/10 active:scale-95"
+                >
+                  <Paperclip className="h-[18px] w-[18px]" />
                 </button>
 
-                {!aiMode ? (
-                  <button type="button" onClick={() => { setShowAttachMenu(!showAttachMenu); setShowEmoji(false); }}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-primary hover:bg-primary/10 active:scale-95">
-                    <Paperclip className="h-4.5 w-4.5" />
-                  </button>
-                ) : (
-                  <button type="button" onClick={() => aiFileInputRef.current?.click()}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-primary hover:bg-primary/10 active:scale-95">
-                    <ImageIcon className="h-4.5 w-4.5" />
-                  </button>
-                )}
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Xabar yozing..."
+                  className="flex-1 rounded-xl bg-secondary/80 px-4 py-2.5 text-sm text-foreground outline-none ring-1 ring-border/50 transition-all focus:ring-primary/50 focus:bg-secondary placeholder:text-muted-foreground"
+                />
 
-                <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder={aiMode ? "Grafikni tahlil qilish uchun rasm yuklang yoki savol yozing..." : "Xabar yozing..."}
-                  className="flex-1 rounded-xl bg-secondary/80 px-4 py-2.5 text-sm text-foreground outline-none ring-1 ring-border/50 transition-all focus:ring-primary/50 focus:bg-secondary placeholder:text-muted-foreground" />
+                <button
+                  type="button"
+                  onClick={() => { setShowEmoji(!showEmoji); setShowAttachMenu(false); }}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-primary hover:bg-primary/10 active:scale-95"
+                >
+                  <Smile className="h-[18px] w-[18px]" />
+                </button>
 
-                {!aiMode && (
-                  <button type="button" onClick={() => { setShowEmoji(!showEmoji); setShowAttachMenu(false); }}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-primary hover:bg-primary/10 active:scale-95">
-                    <Smile className="h-4.5 w-4.5" />
-                  </button>
-                )}
-
-                {aiMode ? (
-                  <button type="submit" disabled={aiThinking || (!newMessage.trim() && !aiImageUrl)}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:shadow-[0_0_20px_-4px_hsl(var(--primary)/0.4)] active:scale-95 disabled:opacity-50">
-                    {aiThinking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
-                  </button>
-                ) : newMessage.trim() ? (
-                  <button type="submit"
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:shadow-[0_0_20px_-4px_hsl(var(--primary)/0.4)] active:scale-95">
+                {newMessage.trim() ? (
+                  <button
+                    type="submit"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:shadow-[0_0_20px_-4px_hsl(var(--primary)/0.4)] active:scale-95"
+                  >
                     <Send className="h-4 w-4" />
                   </button>
                 ) : (
-                  <button type="button" onClick={() => startRecording("audio")}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:shadow-[0_0_20px_-4px_hsl(var(--primary)/0.4)] active:scale-95">
+                  <button
+                    type="button"
+                    onClick={() => startRecording("audio")}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:shadow-[0_0_20px_-4px_hsl(var(--primary)/0.4)] active:scale-95"
+                  >
                     <Mic className="h-4 w-4" />
                   </button>
                 )}
@@ -883,6 +741,7 @@ export default function ChatPage() {
             </div>
           </>
         ) : (
+          /* Empty state - no conversation selected */
           <div className="flex flex-1 flex-col items-center justify-center text-center p-8">
             <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center">
               <div className="flex h-20 w-20 items-center justify-center rounded-2xl glass border-glow mb-5">
