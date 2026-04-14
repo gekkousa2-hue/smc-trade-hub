@@ -1,13 +1,14 @@
-import { CandlestickChart, MessageCircle, User } from "lucide-react";
+import { CandlestickChart, MessageCircle, User, Bot } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface BottomNavProps {
-  activeTab: "chart" | "chat" | "profile";
-  onTabChange: (tab: "chart" | "chat" | "profile") => void;
+  activeTab: "chart" | "chat" | "ai" | "profile";
+  onTabChange: (tab: "chart" | "chat" | "ai" | "profile") => void;
 }
 
 const tabs = [
   { id: "chart" as const, label: "Grafik", icon: CandlestickChart },
+  { id: "ai" as const, label: "Trade-AI", icon: Bot },
   { id: "chat" as const, label: "Chat", icon: MessageCircle },
   { id: "profile" as const, label: "Profil", icon: User },
 ];
@@ -22,7 +23,7 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className="relative flex flex-col items-center gap-0.5 px-6 py-1.5 transition-colors"
+              className="relative flex flex-col items-center gap-0.5 px-5 py-1.5 transition-colors"
             >
               {isActive && (
                 <motion.span
