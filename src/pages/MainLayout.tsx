@@ -4,9 +4,10 @@ import BottomNav from "@/components/BottomNav";
 import Index from "./Index";
 import ChatPage from "./ChatPage";
 import ProfilePage from "./ProfilePage";
+import AIPage from "./AIPage";
 
 export default function MainLayout() {
-  const [activeTab, setActiveTab] = useState<"chart" | "chat" | "profile">("chart");
+  const [activeTab, setActiveTab] = useState<"chart" | "chat" | "ai" | "profile">("chart");
 
   return (
     <div className="min-h-screen bg-background">
@@ -19,6 +20,7 @@ export default function MainLayout() {
           transition={{ duration: 0.2 }}
         >
           {activeTab === "chart" && <Index />}
+          {activeTab === "ai" && <AIPage />}
           {activeTab === "chat" && <ChatPage />}
           {activeTab === "profile" && <ProfilePage />}
         </motion.div>
