@@ -58,8 +58,9 @@ export default function XauusdChart() {
       )}
       <div
         ref={containerRef}
-        className="tradingview-widget-container w-full h-full"
+        className="tradingview-widget-container w-full h-full [&_.tradingview-widget-copyright]:!hidden"
       />
+      <style>{`.tradingview-widget-copyright { display: none !important; }`}</style>
     </div>
   );
 }

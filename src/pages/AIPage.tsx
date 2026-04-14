@@ -223,7 +223,7 @@ export default function AIPage() {
           </div>
           <div>
             <h2 className="font-display text-sm font-bold text-foreground">Trade-AI</h2>
-            <p className="font-mono text-[10px] text-primary/60">SMC Tahlil Agenti</p>
+            <p className="font-mono text-[10px] text-primary/60">Tahlil Agenti</p>
           </div>
         </div>
         {messages.length > 0 && (
@@ -243,7 +243,7 @@ export default function AIPage() {
               </div>
               <h2 className="font-display text-lg font-bold text-foreground mb-2">Trade-AI Tahlil</h2>
               <p className="text-sm text-muted-foreground max-w-xs leading-relaxed mb-6">
-                Grafik rasmini yuklang yoki savol yozing — AI professional SMC tahlilini beradi
+                Grafik rasmini yuklang yoki savol yozing — AI professional tahlilini beradi
               </p>
               <div className="grid grid-cols-2 gap-2 w-full max-w-xs">
                 {[

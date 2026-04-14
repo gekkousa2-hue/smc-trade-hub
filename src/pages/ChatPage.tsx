@@ -653,7 +653,7 @@ export default function ChatPage() {
               <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${getAvatarColor(activeConversation.other_user?.user_id || "")}`}>{getInitials(activeConversation.other_user?.username || "?")}</div>
               <div>
                 <h2 className="font-display text-sm font-bold text-foreground">{activeConversation.other_user?.username || "Noma'lum"}</h2>
-                <p className="font-mono text-[10px] text-primary/60">SMC Trader</p>
+                <p className="font-mono text-[10px] text-primary/60">Trader</p>
               </div>
             </header>
 
