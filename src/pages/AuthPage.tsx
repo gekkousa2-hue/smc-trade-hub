@@ -51,7 +51,7 @@ export default function AuthPage() {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary shadow-[0_0_30px_-4px_hsl(45_93%_58%/0.4)]">
             <MessageCircle className="h-7 w-7 text-primary-foreground" />
           </div>
-          <h1 className="font-display text-2xl font-bold text-gradient-gold">SMC Chat</h1>
+          <h1 className="font-display text-2xl font-bold text-gradient-gold">Trade Chat</h1>
           <p className="mt-1 text-sm text-muted-foreground">Treyderlar uchun chat</p>
         </div>
 
