@@ -58,28 +58,40 @@ export type Database = {
           content: string
           conversation_id: string | null
           created_at: string
+          edited_at: string | null
           id: string
+          is_pinned: boolean | null
           media_type: string | null
           media_url: string | null
+          reply_to_id: string | null
           sender_id: string
+          status: string
         }
         Insert: {
           content: string
           conversation_id?: string | null
           created_at?: string
+          edited_at?: string | null
           id?: string
+          is_pinned?: boolean | null
           media_type?: string | null
           media_url?: string | null
+          reply_to_id?: string | null
           sender_id: string
+          status?: string
         }
         Update: {
           content?: string
           conversation_id?: string | null
           created_at?: string
+          edited_at?: string | null
           id?: string
+          is_pinned?: boolean | null
           media_type?: string | null
           media_url?: string | null
+          reply_to_id?: string | null
           sender_id?: string
+          status?: string
         }
         Relationships: [
           {
@@ -87,6 +99,13 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
           {
@@ -103,6 +122,8 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           id: string
+          is_online: boolean | null
+          last_seen: string | null
           updated_at: string
           user_id: string
           username: string
@@ -111,6 +132,8 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           id?: string
+          is_online?: boolean | null
+          last_seen?: string | null
           updated_at?: string
           user_id: string
           username: string
@@ -119,11 +142,45 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           id?: string
+          is_online?: boolean | null
+          last_seen?: string | null
           updated_at?: string
           user_id?: string
           username?: string
         }
         Relationships: []
+      }
+      typing_indicators: {
+        Row: {
+          conversation_id: string
+          id: string
+          is_typing: boolean | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          id?: string
+          is_typing?: boolean | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          id?: string
+          is_typing?: boolean | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "typing_indicators_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
