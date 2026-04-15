@@ -1,409 +1,80 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Send,
-  ArrowLeft,
-  Search,
-  MessageSquare,
-  X,
-  Check,
-  CheckCheck,
-  MessagesSquare,
-  Paperclip,
-  Mic,
-  Smile,
-  Play,
-  Pause,
-  Image as ImageIcon,
-  FileText,
-  Video,
-  Trash2,
-  Pencil,
-} from "lucide-react";
-import type { User } from "@supabase/supabase-js";
-import { ScrollArea } from "@/components/ui/scroll-area";
-
-interface Profile {
-  user_id: string;
-  username: string;
-  avatar_url: string | null;
-}
-
-interface Conversation {
-  id: string;
-  user1_id: string;
-  user2_id: string;
-  created_at: string;
-  updated_at: string;
-  other_user?: Profile;
-  last_message?: string;
-  last_message_at?: string;
-}
-
-interface Message {
-  id: string;
-  content: string;
-  sender_id: string;
-  created_at: string;
-  conversation_id: string | null;
-  media_url?: string | null;
-  media_type?: string | null;
-  profiles?: { username: string; avatar_url: string | null } | null;
-}
-
-const EMOJI_LIST = [
-  "😀","😂","🤣","😍","🥰","😎","🤔","😢","😡","👍",
-  "👎","🔥","💰","📈","📉","💎","🚀","💪","🎯","⚡",
-  "✅","❌","⭐","💥","🏆","🤝","👏","🙏","💵","📊",
-];
-
-/* ─── Small reusable components ─── */
-
-function AudioPlayer({ src }: { src: string }) {
-  const [playing, setPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const audioRef = useRef<HTMLAudioElement>(null);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const onTime = () => setProgress(audio.currentTime);
-    const onMeta = () => setDuration(audio.duration);
-    const onEnd = () => { setPlaying(false); setProgress(0); };
-    audio.addEventListener("timeupdate", onTime);
-    audio.addEventListener("loadedmetadata", onMeta);
-    audio.addEventListener("ended", onEnd);
-    return () => {
-      audio.removeEventListener("timeupdate", onTime);
-      audio.removeEventListener("loadedmetadata", onMeta);
-      audio.removeEventListener("ended", onEnd);
-    };
-  }, []);
-
-  const toggle = () => {
-    if (!audioRef.current) return;
-    if (playing) audioRef.current.pause(); else audioRef.current.play();
-    setPlaying(!playing);
-  };
-
-  const fmt = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${m}:${sec.toString().padStart(2, "0")}`;
-  };
-
-  return (
-    <div className="flex items-center gap-2 min-w-[180px]">
-      <audio ref={audioRef} src={src} preload="metadata" />
-      <button onClick={toggle} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary transition-colors hover:bg-primary/30">
-        {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 ml-0.5" />}
-      </button>
-      <div className="flex-1 flex flex-col gap-0.5">
-        <div className="h-1 rounded-full bg-muted overflow-hidden">
-          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }} />
-        </div>
-        <span className="font-mono text-[9px] text-muted-foreground">{fmt(progress)} / {duration ? fmt(duration) : "0:00"}</span>
-      </div>
-    </div>
-  );
-}
-
-function VideoMessage({ src }: { src: string }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [playing, setPlaying] = useState(false);
-  const toggle = () => {
-    if (!videoRef.current) return;
-    if (playing) videoRef.current.pause(); else videoRef.current.play();
-    setPlaying(!playing);
-  };
-  return (
-    <div className="relative w-36 h-36 rounded-full overflow-hidden cursor-pointer border-2 border-primary/40" onClick={toggle}>
-      <video ref={videoRef} src={src} className="w-full h-full object-cover" playsInline loop onEnded={() => setPlaying(false)} />
-      {!playing && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background/30">
-          <Play className="h-8 w-8 text-primary drop-shadow" />
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ─── Main Component ─── */
+import { MessageSquare, ArrowDown, Loader2 } from "lucide-react";
+import { useChatState, type Message } from "@/hooks/useChatState";
+import { ChatSidebar } from "@/components/chat/ChatSidebar";
+import { ChatHeader } from "@/components/chat/ChatHeader";
+import { MessageBubble } from "@/components/chat/MessageBubble";
+import { MessageInput } from "@/components/chat/MessageInput";
+import { ContextMenu } from "@/components/chat/ContextMenu";
+import { MessageSkeleton } from "@/components/chat/SkeletonLoaders";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function ChatPage() {
-  const [user, setUser] = useState<User | null>(null);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Profile[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(true);
-  const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
-  const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
-  const [showEmoji, setShowEmoji] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingType, setRecordingType] = useState<"audio" | "video" | null>(null);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const [showAttachMenu, setShowAttachMenu] = useState(false);
-
-  // Edit/Delete state
-  const [contextMenuMsgId, setContextMenuMsgId] = useState<string | null>(null);
-  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
-  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
-  const [editContent, setEditContent] = useState("");
-  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
-
+  const state = useChatState();
   const bottomRef = useRef<HTMLDivElement>(null);
-  const tempToRealId = useRef<Map<string, string>>(new Map());
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<NodeJS.Timeout | null>(null);
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  /* ─── Auth (with listener for session persistence) ─── */
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-    return () => subscription.unsubscribe();
+  const scrollToBottom = useCallback(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  /* ─── Conversations ─── */
-  const fetchConversations = useCallback(async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from("conversations")
-      .select("*")
-      .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
-      .order("updated_at", { ascending: false });
-    if (!data) return;
-    const enriched = await Promise.all(
-      data.map(async (conv) => {
-        const otherUserId = conv.user1_id === user.id ? conv.user2_id : conv.user1_id;
-        const { data: profile } = await supabase.from("profiles").select("user_id, username, avatar_url").eq("user_id", otherUserId).single();
-        const { data: lastMsg } = await supabase.from("messages").select("content, created_at, media_type").eq("conversation_id", conv.id).order("created_at", { ascending: false }).limit(1).single();
-        let lastMsgText = lastMsg?.content;
-        if (lastMsg) {
-          const mt = (lastMsg as any).media_type;
-          if (mt === "audio") lastMsgText = "🎤 Ovozli xabar";
-          else if (mt === "video") lastMsgText = "🎥 Video xabar";
-          else if (mt === "image") lastMsgText = "📷 Rasm";
-          else if (mt === "file") lastMsgText = "📎 Fayl";
+  /* ─── Infinite scroll ─── */
+  const handleScroll = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    if (container.scrollTop < 80 && state.hasMore && !state.isLoadingMore) {
+      const prevHeight = container.scrollHeight;
+      state.loadMoreMessages();
+      // Restore scroll position after loading
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight - prevHeight;
         }
-        return { ...conv, other_user: profile || undefined, last_message: lastMsgText, last_message_at: lastMsg?.created_at } as Conversation;
-      })
-    );
-    setConversations(enriched);
-  }, [user]);
-
-  useEffect(() => { fetchConversations(); }, [fetchConversations]);
-
-  /* ─── Messages fetch ─── */
-  useEffect(() => {
-    if (!activeConversationId) { setMessages([]); return; }
-    const fetchMessages = async () => {
-      const { data } = await supabase
-        .from("messages")
-        .select("*, profiles(username, avatar_url)")
-        .eq("conversation_id", activeConversationId)
-        .order("created_at", { ascending: true })
-        .limit(200);
-      if (data) setMessages(data as Message[]);
-    };
-    fetchMessages();
-  }, [activeConversationId]);
-
-  /* ─── Real-time messages ─── */
-  useEffect(() => {
-    if (!activeConversationId) return;
-    const channel = supabase
-      .channel(`messages-${activeConversationId}`)
-      .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: "messages",
-        filter: `conversation_id=eq.${activeConversationId}`,
-      }, async (payload) => {
-        const newId = payload.new.id as string;
-        if (tempToRealId.current.has(newId)) {
-          tempToRealId.current.delete(newId);
-          return;
-        }
-        const { data: profile } = await supabase.from("profiles").select("username, avatar_url").eq("user_id", payload.new.sender_id).single();
-        const newMsg: Message = { ...(payload.new as Message), profiles: profile };
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === newMsg.id)) return prev;
-          return [...prev, newMsg];
-        });
-        fetchConversations();
-      })
-      .on("postgres_changes", {
-        event: "DELETE",
-        schema: "public",
-        table: "messages",
-        filter: `conversation_id=eq.${activeConversationId}`,
-      }, (payload) => {
-        setMessages((prev) => prev.filter((m) => m.id !== (payload.old as any).id));
-        fetchConversations();
-      })
-      .on("postgres_changes", {
-        event: "UPDATE",
-        schema: "public",
-        table: "messages",
-        filter: `conversation_id=eq.${activeConversationId}`,
-      }, (payload) => {
-        setMessages((prev) => prev.map((m) => m.id === (payload.new as any).id ? { ...m, content: (payload.new as any).content } : m));
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [activeConversationId, fetchConversations]);
-
-  /* ─── Real-time conversations ─── */
-  useEffect(() => {
-    if (!user) return;
-    const channel = supabase
-      .channel("conversations-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "conversations" }, () => fetchConversations())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [user, fetchConversations]);
-
-  /* ─── Auto-scroll ─── */
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  /* ─── Close context menu on outside click ─── */
-  useEffect(() => {
-    if (!contextMenuMsgId) return;
-    const handler = () => setContextMenuMsgId(null);
-    window.addEventListener("click", handler);
-    return () => window.removeEventListener("click", handler);
-  }, [contextMenuMsgId]);
-
-  /* ─── Search ─── */
-  useEffect(() => {
-    if (!searchQuery.trim() || !user) { setSearchResults([]); return; }
-    const timeout = setTimeout(async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("user_id, username, avatar_url")
-        .ilike("username", `%${searchQuery}%`)
-        .neq("user_id", user.id)
-        .limit(10);
-      setSearchResults(data || []);
-    }, 300);
-    return () => clearTimeout(timeout);
-  }, [searchQuery, user]);
-
-  /* ─── Actions ─── */
-  const openConversation = async (otherUserId: string) => {
-    if (!user) return;
-    const { data, error } = await supabase.rpc("get_or_create_conversation", { other_user_id: otherUserId });
-    if (error) { console.error("Error:", error); return; }
-    setActiveConversationId(data as string);
-    setSearchQuery("");
-    setSearchResults([]);
-    setIsSearching(false);
-    setShowSidebar(false);
-    fetchConversations();
-  };
-
-  const uploadMedia = async (file: Blob, ext: string) => {
-    if (!user) return null;
-    const path = `${user.id}/${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from("chat-media").upload(path, file);
-    if (error) { console.error("Upload error:", error); return null; }
-    const { data } = supabase.storage.from("chat-media").getPublicUrl(path);
-    return data.publicUrl;
-  };
-
-  const sendMessage = async (e?: React.FormEvent, mediaUrl?: string, mediaType?: string) => {
-    if (e) e.preventDefault();
-    const content = newMessage.trim();
-    if (!content && !mediaUrl) return;
-    if (!user || !activeConversationId) return;
-
-    const tempId = `temp-${Date.now()}-${Math.random()}`;
-    setNewMessage("");
-    setShowEmoji(false);
-
-    const optimisticMsg: Message = {
-      id: tempId,
-      content: content || (mediaType === "audio" ? "🎤" : mediaType === "video" ? "🎥" : "📎"),
-      sender_id: user.id,
-      created_at: new Date().toISOString(),
-      conversation_id: activeConversationId,
-      media_url: mediaUrl,
-      media_type: mediaType,
-      profiles: null,
-    };
-    setSendingIds((prev) => new Set(prev).add(tempId));
-    setMessages((prev) => [...prev, optimisticMsg]);
-
-    try {
-      const insertData: any = { sender_id: user.id, conversation_id: activeConversationId, content: content || "" };
-      if (mediaUrl) { insertData.media_url = mediaUrl; insertData.media_type = mediaType; }
-      const { data, error } = await supabase.from("messages").insert(insertData).select("id").single();
-      if (error) throw error;
-      tempToRealId.current.set(data.id, tempId);
-      setSendingIds((prev) => { const s = new Set(prev); s.delete(tempId); return s; });
-      setConfirmedIds((prev) => new Set(prev).add(tempId));
-      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, id: data.id } : m)));
-      setConfirmedIds((prev) => { const s = new Set(prev); s.delete(tempId); s.add(data.id); return s; });
-      fetchConversations();
-    } catch (err) {
-      setSendingIds((prev) => { const s = new Set(prev); s.delete(tempId); return s; });
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      console.error("Xabar yuborishda xatolik:", err);
+      });
     }
-  };
+  }, [state.hasMore, state.isLoadingMore, state.loadMoreMessages]);
 
-  const deleteMessage = async (msgId: string) => {
-    setContextMenuMsgId(null);
-    setMessages((prev) => prev.filter((m) => m.id !== msgId));
-    const { error } = await supabase.from("messages").delete().eq("id", msgId);
-    if (error) console.error("Delete error:", error);
-    fetchConversations();
-  };
+  /* ─── Show scroll-to-bottom button ─── */
+  const isNearBottom = useCallback(() => {
+    const c = scrollContainerRef.current;
+    if (!c) return true;
+    return c.scrollHeight - c.scrollTop - c.clientHeight < 200;
+  }, []);
 
-  const startEditing = (msg: Message) => {
-    setContextMenuMsgId(null);
-    setEditingMsgId(msg.id);
-    setEditContent(msg.content);
-  };
+  /* ─── Long press handler ─── */
+  const handlePointerDown = useCallback((e: React.PointerEvent, msg: Message) => {
+    if (msg.sender_id !== state.user?.id) return;
+    if (msg.id.startsWith("temp-")) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    longPressTimerRef.current = setTimeout(() => {
+      state.setContextMenuMsgId(msg.id);
+      state.setContextMenuPos({ x: rect.left + rect.width / 2, y: rect.top });
+    }, 500);
+  }, [state.user]);
 
-  const saveEdit = async () => {
-    if (!editingMsgId || !editContent.trim()) return;
-    const newContent = editContent.trim();
-    setMessages((prev) => prev.map((m) => m.id === editingMsgId ? { ...m, content: newContent } : m));
-    setEditingMsgId(null);
-    setEditContent("");
-    const { error } = await supabase.from("messages").update({ content: newContent }).eq("id", editingMsgId);
-    if (error) console.error("Update error:", error);
-  };
+  const handlePointerUp = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
 
-  const cancelEdit = () => {
-    setEditingMsgId(null);
-    setEditContent("");
-  };
+  const handleContextMenu = useCallback((e: React.MouseEvent, msg: Message) => {
+    state.setContextMenuMsgId(msg.id);
+    state.setContextMenuPos({ x: e.clientX, y: e.clientY });
+  }, []);
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-    setShowAttachMenu(false);
-    const ext = file.name.split(".").pop() || "file";
-    const isImage = file.type.startsWith("image/");
-    const url = await uploadMedia(file, ext);
-    if (url) await sendMessage(undefined, url, isImage ? "image" : "file");
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  /* ─── Recording ─── */
+  const stopStreamTracks = () => {
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
   };
 
   const startRecording = async (type: "audio" | "video") => {
@@ -417,23 +88,21 @@ export default function ChatPage() {
         videoPreviewRef.current.srcObject = stream;
         videoPreviewRef.current.play();
       }
-      const recorder = new MediaRecorder(stream, {
-        mimeType: type === "audio" ? "audio/webm" : "video/webm",
-      });
+      const recorder = new MediaRecorder(stream, { mimeType: type === "audio" ? "audio/webm" : "video/webm" });
       chunksRef.current = [];
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: type === "audio" ? "audio/webm" : "video/webm" });
-        const url = await uploadMedia(blob, "webm");
-        if (url) await sendMessage(undefined, url, type);
+        const url = await state.uploadMedia(blob, "webm");
+        if (url) await state.sendMessage(undefined, url, type);
         stopStreamTracks();
       };
       mediaRecorderRef.current = recorder;
       recorder.start();
-      setIsRecording(true);
-      setRecordingType(type);
-      setRecordingTime(0);
-      recordTimerRef.current = setInterval(() => setRecordingTime((t) => t + 1), 1000);
+      state.setIsRecording(true);
+      state.setRecordingType(type);
+      state.setRecordingTime(0);
+      recordTimerRef.current = setInterval(() => state.setRecordingTime(t => t + 1), 1000);
     } catch (err) {
       console.error("Recording error:", err);
     }
@@ -444,9 +113,9 @@ export default function ChatPage() {
       mediaRecorderRef.current.stop();
     }
     if (recordTimerRef.current) clearInterval(recordTimerRef.current);
-    setIsRecording(false);
-    setRecordingType(null);
-    setRecordingTime(0);
+    state.setIsRecording(false);
+    state.setRecordingType(null);
+    state.setRecordingTime(0);
   };
 
   const cancelRecording = () => {
@@ -457,453 +126,162 @@ export default function ChatPage() {
     }
     stopStreamTracks();
     if (recordTimerRef.current) clearInterval(recordTimerRef.current);
-    setIsRecording(false);
-    setRecordingType(null);
-    setRecordingTime(0);
+    state.setIsRecording(false);
+    state.setRecordingType(null);
+    state.setRecordingTime(0);
   };
 
-  const stopStreamTracks = () => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !state.user) return;
+    state.setShowAttachMenu(false);
+    const ext = file.name.split(".").pop() || "file";
+    const isImage = file.type.startsWith("image/");
+    const url = await state.uploadMedia(file, ext);
+    if (url) await state.sendMessage(undefined, url, isImage ? "image" : "file");
+    e.target.value = "";
   };
 
-  /* ─── Long press handler ─── */
-  const handlePointerDown = (e: React.PointerEvent, msg: Message) => {
-    if (msg.sender_id !== user?.id) return;
-    if (msg.id.startsWith("temp-")) return;
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    longPressTimerRef.current = setTimeout(() => {
-      setContextMenuMsgId(msg.id);
-      setContextMenuPos({ x: rect.left + rect.width / 2, y: rect.top });
-    }, 500);
-  };
+  const activeConversation = state.conversations.find(c => c.id === state.activeConversationId);
 
-  const handlePointerUp = () => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  };
-
-  /* ─── Helpers ─── */
-  const getInitials = (name: string) => name.slice(0, 2).toUpperCase();
-  const getAvatarColor = (id: string) => {
-    const colors = [
-      "from-primary/90 to-primary/50",
-      "from-[hsl(142_60%_45%)] to-[hsl(142_60%_35%)]",
-      "from-[hsl(210_80%_55%)] to-[hsl(210_80%_40%)]",
-      "from-[hsl(270_60%_55%)] to-[hsl(270_60%_40%)]",
-      "from-[hsl(330_60%_55%)] to-[hsl(330_60%_40%)]",
-      "from-[hsl(20_80%_55%)] to-[hsl(20_80%_40%)]",
-    ];
-    return colors[id.charCodeAt(0) % colors.length];
-  };
-  const formatTime = (dateStr: string) =>
-    new Date(dateStr).toLocaleTimeString("uz", { hour: "2-digit", minute: "2-digit" });
-  const formatRecTime = (s: number) =>
-    `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
-
-  const activeConversation = conversations.find((c) => c.id === activeConversationId);
-
-  const renderMessageContent = (msg: Message) => {
-    if (msg.media_type === "audio" && msg.media_url) return <AudioPlayer src={msg.media_url} />;
-    if (msg.media_type === "video" && msg.media_url) return <VideoMessage src={msg.media_url} />;
-    if (msg.media_type === "image" && msg.media_url) return (
-      <div className="space-y-1.5">
-        <img src={msg.media_url} alt="media" className="rounded-xl max-w-[240px] max-h-[240px] object-cover" loading="lazy" />
-        {msg.content && msg.content !== "📎" && <p className="text-sm">{msg.content}</p>}
-      </div>
-    );
-    if (msg.media_type === "file" && msg.media_url) return (
-      <a href={msg.media_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 underline decoration-primary/40">
-        <FileText className="h-4 w-4" /> {msg.content || "Fayl"}
-      </a>
-    );
-    return <span>{msg.content}</span>;
-  };
-
-  /* ─── Render ─── */
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-background">
       {/* ─── Sidebar ─── */}
-      <div className={`${showSidebar ? "flex" : "hidden md:flex"} w-full md:w-80 flex-col border-r border-border/30`}>
-        {/* Header */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border/30">
-          <MessagesSquare className="h-5 w-5 text-primary" />
-          <h1 className="font-display text-lg font-bold text-foreground">Xabarlar</h1>
-        </div>
-
-        {/* Search */}
-        <div className="px-3 py-2.5">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setIsSearching(!!e.target.value); }}
-              placeholder="Treyderlarni qidirish..."
-              className="w-full rounded-xl bg-secondary/80 pl-9 pr-8 py-2.5 text-sm text-foreground outline-none ring-1 ring-border/50 transition-all focus:ring-primary/50 focus:bg-secondary placeholder:text-muted-foreground"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => { setSearchQuery(""); setSearchResults([]); setIsSearching(false); }}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* List */}
-        <ScrollArea className="flex-1">
-          {isSearching ? (
-            <div className="px-2 py-1">
-              <p className="px-3 py-1.5 font-mono text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">Natijalar</p>
-              {searchResults.length === 0 && searchQuery.trim() && (
-                <p className="px-3 py-6 text-center text-sm text-muted-foreground">Hech narsa topilmadi</p>
-              )}
-              {searchResults.map((profile) => (
-                <button
-                  key={profile.user_id}
-                  onClick={() => openConversation(profile.user_id)}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition-all hover:bg-secondary/80 active:scale-[0.98]"
-                >
-                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${getAvatarColor(profile.user_id)}`}>
-                    {getInitials(profile.username)}
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-foreground">{profile.username}</p>
-                    <p className="text-xs text-primary/70 font-mono">Xabar yozish →</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="px-2 py-1">
-              {conversations.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center px-6">
-                  <div className="flex h-20 w-20 items-center justify-center rounded-2xl glass border-glow mb-4">
-                    <MessageSquare className="h-9 w-9 text-primary/50" />
-                  </div>
-                  <h3 className="font-display text-base font-bold text-foreground mb-1">Suhbatlar yo'q</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">Suhbatni boshlash uchun yuqoridagi qidiruvdan treyderlarni toping</p>
-                </div>
-              ) : (
-                conversations.map((conv) => (
-                  <button
-                    key={conv.id}
-                    onClick={() => { setActiveConversationId(conv.id); setShowSidebar(false); }}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 mb-0.5 transition-all active:scale-[0.98] ${
-                      activeConversationId === conv.id
-                        ? "bg-primary/10 ring-1 ring-primary/20"
-                        : "hover:bg-secondary/60"
-                    }`}
-                  >
-                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${getAvatarColor(conv.other_user?.user_id || "")}`}>
-                      {getInitials(conv.other_user?.username || "?")}
-                    </div>
-                    <div className="flex-1 min-w-0 text-left">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-foreground truncate">{conv.other_user?.username || "Noma'lum"}</p>
-                        {conv.last_message_at && (
-                          <span className="font-mono text-[10px] text-muted-foreground/60 ml-2 shrink-0">{formatTime(conv.last_message_at)}</span>
-                        )}
-                      </div>
-                      {conv.last_message && <p className="text-xs text-muted-foreground truncate mt-0.5">{conv.last_message}</p>}
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-        </ScrollArea>
+      <div className={`${state.showSidebar ? "flex" : "hidden md:flex"} w-full md:w-80 flex-col border-r border-border/30`}>
+        <ChatSidebar
+          conversations={state.conversations}
+          activeConversationId={state.activeConversationId}
+          searchQuery={state.searchQuery}
+          searchResults={state.searchResults}
+          isSearching={state.isSearching}
+          loadingConversations={state.loadingConversations}
+          onSearchChange={(q) => { state.setSearchQuery(q); state.setIsSearching(!!q); }}
+          onOpenConversation={state.openConversation}
+          onSelectConversation={(id) => { state.setActiveConversationId(id); state.setShowSidebar(false); }}
+        />
       </div>
 
       {/* ─── Chat Area ─── */}
-      <div className={`${!showSidebar ? "flex" : "hidden md:flex"} flex-1 flex-col`}>
-        {activeConversationId && activeConversation ? (
+      <div className={`${!state.showSidebar ? "flex" : "hidden md:flex"} flex-1 flex-col relative`}>
+        {state.activeConversationId && activeConversation ? (
           <>
-            {/* Chat Header */}
-            <header className="glass sticky top-0 z-40 flex items-center gap-3 px-4 py-3 border-b border-border/30">
-              <button
-                onClick={() => setShowSidebar(true)}
-                className="flex md:hidden h-8 w-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground transition-colors hover:text-foreground active:scale-95"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </button>
-              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${getAvatarColor(activeConversation.other_user?.user_id || "")}`}>
-                {getInitials(activeConversation.other_user?.username || "?")}
-              </div>
-              <div>
-                <h2 className="font-display text-sm font-bold text-foreground">{activeConversation.other_user?.username || "Noma'lum"}</h2>
-                <p className="font-mono text-[10px] text-primary/60">Online</p>
-              </div>
-            </header>
+            <ChatHeader
+              conversation={activeConversation}
+              otherTyping={state.otherTyping}
+              onBack={() => state.setShowSidebar(true)}
+            />
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2.5 relative">
-              {messages.length === 0 && (
+            <div
+              ref={scrollContainerRef}
+              onScroll={handleScroll}
+              className="flex-1 overflow-y-auto px-4 py-4 space-y-2.5 relative scroll-smooth"
+            >
+              {/* Loading more indicator */}
+              {state.isLoadingMore && (
+                <div className="flex justify-center py-2">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary/60" />
+                </div>
+              )}
+
+              {state.loadingMessages ? (
+                <MessageSkeleton />
+              ) : state.messages.length === 0 ? (
                 <div className="flex h-full items-center justify-center">
                   <div className="text-center">
                     <p className="text-2xl mb-2">👋</p>
                     <p className="text-sm text-muted-foreground">Salomlashing va suhbatni boshlang!</p>
                   </div>
                 </div>
-              )}
-              <AnimatePresence initial={false}>
-                {messages.map((msg) => {
-                  const isOwn = msg.sender_id === user?.id;
-                  return (
-                    <motion.div
+              ) : (
+                <AnimatePresence initial={false}>
+                  {state.messages.map(msg => (
+                    <MessageBubble
                       key={msg.id}
-                      initial={{ opacity: 0, y: 6, scale: 0.97 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      transition={{ duration: 0.12 }}
-                      className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`max-w-[78%] flex flex-col ${isOwn ? "items-end" : "items-start"} select-none`}
-                        onPointerDown={(e) => handlePointerDown(e, msg)}
-                        onPointerUp={handlePointerUp}
-                        onPointerLeave={handlePointerUp}
-                        onContextMenu={(e) => {
-                          if (isOwn && !msg.id.startsWith("temp-")) {
-                            e.preventDefault();
-                            setContextMenuMsgId(msg.id);
-                            setContextMenuPos({ x: e.clientX, y: e.clientY });
-                          }
-                        }}
-                      >
-                        <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed backdrop-blur-sm ${
-                          isOwn
-                            ? "rounded-br-sm bg-primary/90 text-primary-foreground shadow-[0_2px_16px_-4px_hsl(var(--primary)/0.35)]"
-                            : "rounded-bl-sm bg-secondary/70 border border-border/40 text-foreground"
-                        }`}>
-                          {renderMessageContent(msg)}
-                        </div>
-                        <div className={`flex items-center gap-1 mt-0.5 ${isOwn ? "flex-row-reverse" : ""}`}>
-                          <span className="font-mono text-[10px] text-muted-foreground/50">{formatTime(msg.created_at)}</span>
-                          {isOwn && (
-                            <span className={sendingIds.has(msg.id) ? "text-muted-foreground/40" : "text-primary/70"}>
-                              {sendingIds.has(msg.id) ? <Check className="h-3 w-3" /> : <CheckCheck className="h-3 w-3" />}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
+                      msg={msg}
+                      isOwn={msg.sender_id === state.user?.id}
+                      isSending={state.sendingIds.has(msg.id)}
+                      onContextMenu={handleContextMenu}
+                      onPointerDown={handlePointerDown}
+                      onPointerUp={handlePointerUp}
+                    />
+                  ))}
+                </AnimatePresence>
+              )}
+
+              {/* Typing indicator */}
+              {state.otherTyping && (
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex justify-start"
+                >
+                  <div className="rounded-2xl rounded-bl-sm bg-secondary/70 border border-border/40 px-4 py-2.5">
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 rounded-full bg-primary/60 animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="w-2 h-2 rounded-full bg-primary/60 animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="w-2 h-2 rounded-full bg-primary/60 animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
               <div ref={bottomRef} />
 
-              {/* Context Menu (long press / right click) */}
-              <AnimatePresence>
-                {contextMenuMsgId && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    transition={{ duration: 0.12 }}
-                    className="fixed z-[100] glass border border-border/50 rounded-xl shadow-xl overflow-hidden"
-                    style={{
-                      left: Math.min(contextMenuPos.x, window.innerWidth - 160),
-                      top: Math.max(contextMenuPos.y - 90, 8),
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {(() => {
-                      const msg = messages.find((m) => m.id === contextMenuMsgId);
-                      const canEdit = msg && !msg.media_type;
-                      return (
-                        <>
-                          {canEdit && (
-                            <button
-                              onClick={() => startEditing(msg!)}
-                              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-foreground hover:bg-primary/10 transition-colors"
-                            >
-                              <Pencil className="h-4 w-4 text-primary" />
-                              Tahrirlash
-                            </button>
-                          )}
-                          <button
-                            onClick={() => deleteMessage(contextMenuMsgId!)}
-                            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            O'chirish
-                          </button>
-                        </>
-                      );
-                    })()}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              {/* Context Menu */}
+              <ContextMenu
+                contextMenuMsgId={state.contextMenuMsgId}
+                contextMenuPos={state.contextMenuPos}
+                messages={state.messages}
+                onStartEditing={state.startEditing}
+                onDelete={state.deleteMessage}
+                onTogglePin={state.togglePin}
+                onReply={state.replyToMessage}
+              />
             </div>
 
-            {/* Recording Overlay */}
+            {/* Scroll to bottom button */}
             <AnimatePresence>
-              {isRecording && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 20 }}
-                  className="absolute bottom-16 left-0 right-0 flex flex-col items-center justify-center gap-3 p-6 glass border-t border-border/30 z-50"
+              {scrollContainerRef.current && !isNearBottom() && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  onClick={scrollToBottom}
+                  className="absolute bottom-20 right-4 z-30 flex h-10 w-10 items-center justify-center rounded-full glass border border-border/40 shadow-lg transition-colors hover:bg-primary/10"
                 >
-                  {recordingType === "video" && (
-                    <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-destructive/60 animate-pulse">
-                      <video ref={videoPreviewRef} className="w-full h-full object-cover" muted playsInline />
-                    </div>
-                  )}
-                  {recordingType === "audio" && (
-                    <div className="flex items-center gap-2">
-                      <div className="h-3 w-3 rounded-full bg-destructive animate-pulse" />
-                      <span className="font-mono text-sm text-destructive">Yozilmoqda...</span>
-                    </div>
-                  )}
-                  <span className="font-mono text-lg font-bold text-foreground">{formatRecTime(recordingTime)}</span>
-                  <div className="flex items-center gap-4">
-                    <button onClick={cancelRecording} className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/20 text-destructive transition-colors hover:bg-destructive/30">
-                      <X className="h-5 w-5" />
-                    </button>
-                    <button onClick={stopRecording} className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_0_24px_-4px_hsl(var(--primary)/0.5)] transition-transform active:scale-90">
-                      <Send className="h-6 w-6" />
-                    </button>
-                  </div>
-                </motion.div>
+                  <ArrowDown className="h-4 w-4 text-primary" />
+                </motion.button>
               )}
             </AnimatePresence>
 
-            {/* Emoji Panel */}
-            <AnimatePresence>
-              {showEmoji && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  className="border-t border-border/30 bg-secondary/90 backdrop-blur-sm px-4 py-3"
-                >
-                  <div className="flex flex-wrap gap-1.5">
-                    {EMOJI_LIST.map((em) => (
-                      <button
-                        key={em}
-                        onClick={() => setNewMessage((prev) => prev + em)}
-                        className="h-9 w-9 flex items-center justify-center text-lg rounded-lg hover:bg-primary/10 active:scale-90 transition-all"
-                      >
-                        {em}
-                      </button>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Edit Bar */}
-            {editingMsgId && (
-              <div className="border-t border-primary/30 bg-primary/5 px-3 py-2 flex items-center gap-2">
-                <Pencil className="h-4 w-4 text-primary shrink-0" />
-                <span className="text-xs text-primary font-medium">Tahrirlash</span>
-                <button onClick={cancelEdit} className="ml-auto text-muted-foreground hover:text-foreground">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            )}
-
-            {/* Input Bar */}
-            <div className="glass border-t border-border/30 px-3 py-2.5 relative">
-              <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" />
-
-              {/* Attach Menu */}
-              <AnimatePresence>
-                {showAttachMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 8 }}
-                    className="absolute bottom-full left-3 mb-2 flex gap-2 p-2 rounded-xl glass border border-border/40"
-                  >
-                    <button
-                      onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false); }}
-                      className="flex flex-col items-center gap-1 p-2.5 rounded-xl hover:bg-primary/10 transition-colors"
-                    >
-                      <ImageIcon className="h-5 w-5 text-primary" />
-                      <span className="text-[10px] text-muted-foreground">Rasm</span>
-                    </button>
-                    <button
-                      onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false); }}
-                      className="flex flex-col items-center gap-1 p-2.5 rounded-xl hover:bg-primary/10 transition-colors"
-                    >
-                      <FileText className="h-5 w-5 text-[hsl(210_80%_55%)]" />
-                      <span className="text-[10px] text-muted-foreground">Fayl</span>
-                    </button>
-                    <button
-                      onClick={() => { startRecording("video"); setShowAttachMenu(false); }}
-                      className="flex flex-col items-center gap-1 p-2.5 rounded-xl hover:bg-primary/10 transition-colors"
-                    >
-                      <Video className="h-5 w-5 text-[hsl(330_60%_55%)]" />
-                      <span className="text-[10px] text-muted-foreground">Video</span>
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <form onSubmit={editingMsgId ? (e) => { e.preventDefault(); saveEdit(); } : sendMessage} className="flex items-center gap-1.5">
-                {!editingMsgId && (
-                  <button
-                    type="button"
-                    onClick={() => { setShowAttachMenu(!showAttachMenu); setShowEmoji(false); }}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-primary hover:bg-primary/10 active:scale-95"
-                  >
-                    <Paperclip className="h-[18px] w-[18px]" />
-                  </button>
-                )}
-
-                <input
-                  type="text"
-                  value={editingMsgId ? editContent : newMessage}
-                  onChange={(e) => editingMsgId ? setEditContent(e.target.value) : setNewMessage(e.target.value)}
-                  placeholder={editingMsgId ? "Xabarni tahrirlang..." : "Xabar yozing..."}
-                  className="flex-1 rounded-xl bg-secondary/80 px-4 py-2.5 text-sm text-foreground outline-none ring-1 ring-border/50 transition-all focus:ring-primary/50 focus:bg-secondary placeholder:text-muted-foreground"
-                />
-
-                {!editingMsgId && (
-                  <button
-                    type="button"
-                    onClick={() => { setShowEmoji(!showEmoji); setShowAttachMenu(false); }}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-primary hover:bg-primary/10 active:scale-95"
-                  >
-                    <Smile className="h-[18px] w-[18px]" />
-                  </button>
-                )}
-
-                {editingMsgId ? (
-                  <button
-                    type="submit"
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:shadow-[0_0_20px_-4px_hsl(var(--primary)/0.4)] active:scale-95"
-                  >
-                    <Check className="h-4 w-4" />
-                  </button>
-                ) : newMessage.trim() ? (
-                  <button
-                    type="submit"
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:shadow-[0_0_20px_-4px_hsl(var(--primary)/0.4)] active:scale-95"
-                  >
-                    <Send className="h-4 w-4" />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => startRecording("audio")}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:shadow-[0_0_20px_-4px_hsl(var(--primary)/0.4)] active:scale-95"
-                  >
-                    <Mic className="h-4 w-4" />
-                  </button>
-                )}
-              </form>
-            </div>
+            <MessageInput
+              newMessage={state.newMessage}
+              editingMsgId={state.editingMsgId}
+              editContent={state.editContent}
+              replyTo={state.replyTo}
+              showEmoji={state.showEmoji}
+              showAttachMenu={state.showAttachMenu}
+              isRecording={state.isRecording}
+              recordingType={state.recordingType}
+              recordingTime={state.recordingTime}
+              onNewMessageChange={state.setNewMessage}
+              onEditContentChange={state.setEditContent}
+              onSendMessage={state.sendMessage}
+              onSaveEdit={state.saveEdit}
+              onCancelEdit={state.cancelEdit}
+              onCancelReply={() => state.setReplyTo(null)}
+              onToggleEmoji={() => { state.setShowEmoji(!state.showEmoji); state.setShowAttachMenu(false); }}
+              onToggleAttach={() => { state.setShowAttachMenu(!state.showAttachMenu); state.setShowEmoji(false); }}
+              onStartRecording={startRecording}
+              onStopRecording={stopRecording}
+              onCancelRecording={cancelRecording}
+              onFileSelect={handleFileSelect}
+              onTyping={state.handleTyping}
+              videoPreviewRef={videoPreviewRef}
+            />
           </>
         ) : (
-          /* Empty state - no conversation selected */
           <div className="flex flex-1 flex-col items-center justify-center text-center p-8">
             <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center">
               <div className="flex h-20 w-20 items-center justify-center rounded-2xl glass border-glow mb-5">
