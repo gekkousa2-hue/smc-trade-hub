@@ -18,6 +18,8 @@ import {
   Image as ImageIcon,
   FileText,
   Video,
+  Trash2,
+  Pencil,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -148,6 +150,13 @@ export default function ChatPage() {
   const [recordingTime, setRecordingTime] = useState(0);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
 
+  // Edit/Delete state
+  const [contextMenuMsgId, setContextMenuMsgId] = useState<string | null>(null);
+  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const tempToRealId = useRef<Map<string, string>>(new Map());
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -157,9 +166,13 @@ export default function ChatPage() {
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  /* ─── Auth ─── */
+  /* ─── Auth (with listener for session persistence) ─── */
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   /* ─── Conversations ─── */
@@ -231,6 +244,23 @@ export default function ChatPage() {
         });
         fetchConversations();
       })
+      .on("postgres_changes", {
+        event: "DELETE",
+        schema: "public",
+        table: "messages",
+        filter: `conversation_id=eq.${activeConversationId}`,
+      }, (payload) => {
+        setMessages((prev) => prev.filter((m) => m.id !== (payload.old as any).id));
+        fetchConversations();
+      })
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "messages",
+        filter: `conversation_id=eq.${activeConversationId}`,
+      }, (payload) => {
+        setMessages((prev) => prev.map((m) => m.id === (payload.new as any).id ? { ...m, content: (payload.new as any).content } : m));
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [activeConversationId, fetchConversations]);
@@ -249,6 +279,14 @@ export default function ChatPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  /* ─── Close context menu on outside click ─── */
+  useEffect(() => {
+    if (!contextMenuMsgId) return;
+    const handler = () => setContextMenuMsgId(null);
+    window.addEventListener("click", handler);
+    return () => window.removeEventListener("click", handler);
+  }, [contextMenuMsgId]);
 
   /* ─── Search ─── */
   useEffect(() => {
@@ -328,6 +366,35 @@ export default function ChatPage() {
     }
   };
 
+  const deleteMessage = async (msgId: string) => {
+    setContextMenuMsgId(null);
+    setMessages((prev) => prev.filter((m) => m.id !== msgId));
+    const { error } = await supabase.from("messages").delete().eq("id", msgId);
+    if (error) console.error("Delete error:", error);
+    fetchConversations();
+  };
+
+  const startEditing = (msg: Message) => {
+    setContextMenuMsgId(null);
+    setEditingMsgId(msg.id);
+    setEditContent(msg.content);
+  };
+
+  const saveEdit = async () => {
+    if (!editingMsgId || !editContent.trim()) return;
+    const newContent = editContent.trim();
+    setMessages((prev) => prev.map((m) => m.id === editingMsgId ? { ...m, content: newContent } : m));
+    setEditingMsgId(null);
+    setEditContent("");
+    const { error } = await supabase.from("messages").update({ content: newContent }).eq("id", editingMsgId);
+    if (error) console.error("Update error:", error);
+  };
+
+  const cancelEdit = () => {
+    setEditingMsgId(null);
+    setEditContent("");
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
@@ -398,6 +465,24 @@ export default function ChatPage() {
   const stopStreamTracks = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+  };
+
+  /* ─── Long press handler ─── */
+  const handlePointerDown = (e: React.PointerEvent, msg: Message) => {
+    if (msg.sender_id !== user?.id) return;
+    if (msg.id.startsWith("temp-")) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    longPressTimerRef.current = setTimeout(() => {
+      setContextMenuMsgId(msg.id);
+      setContextMenuPos({ x: rect.left + rect.width / 2, y: rect.top });
+    }, 500);
+  };
+
+  const handlePointerUp = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
   };
 
   /* ─── Helpers ─── */
@@ -557,7 +642,7 @@ export default function ChatPage() {
             </header>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2.5">
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2.5 relative">
               {messages.length === 0 && (
                 <div className="flex h-full items-center justify-center">
                   <div className="text-center">
@@ -577,7 +662,19 @@ export default function ChatPage() {
                       transition={{ duration: 0.12 }}
                       className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
                     >
-                      <div className={`max-w-[78%] flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
+                      <div
+                        className={`max-w-[78%] flex flex-col ${isOwn ? "items-end" : "items-start"} select-none`}
+                        onPointerDown={(e) => handlePointerDown(e, msg)}
+                        onPointerUp={handlePointerUp}
+                        onPointerLeave={handlePointerUp}
+                        onContextMenu={(e) => {
+                          if (isOwn && !msg.id.startsWith("temp-")) {
+                            e.preventDefault();
+                            setContextMenuMsgId(msg.id);
+                            setContextMenuPos({ x: e.clientX, y: e.clientY });
+                          }
+                        }}
+                      >
                         <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed backdrop-blur-sm ${
                           isOwn
                             ? "rounded-br-sm bg-primary/90 text-primary-foreground shadow-[0_2px_16px_-4px_hsl(var(--primary)/0.35)]"
@@ -599,6 +696,49 @@ export default function ChatPage() {
                 })}
               </AnimatePresence>
               <div ref={bottomRef} />
+
+              {/* Context Menu (long press / right click) */}
+              <AnimatePresence>
+                {contextMenuMsgId && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    transition={{ duration: 0.12 }}
+                    className="fixed z-[100] glass border border-border/50 rounded-xl shadow-xl overflow-hidden"
+                    style={{
+                      left: Math.min(contextMenuPos.x, window.innerWidth - 160),
+                      top: Math.max(contextMenuPos.y - 90, 8),
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {(() => {
+                      const msg = messages.find((m) => m.id === contextMenuMsgId);
+                      const canEdit = msg && !msg.media_type;
+                      return (
+                        <>
+                          {canEdit && (
+                            <button
+                              onClick={() => startEditing(msg!)}
+                              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-foreground hover:bg-primary/10 transition-colors"
+                            >
+                              <Pencil className="h-4 w-4 text-primary" />
+                              Tahrirlash
+                            </button>
+                          )}
+                          <button
+                            onClick={() => deleteMessage(contextMenuMsgId!)}
+                            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            O'chirish
+                          </button>
+                        </>
+                      );
+                    })()}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Recording Overlay */}
@@ -658,6 +798,17 @@ export default function ChatPage() {
               )}
             </AnimatePresence>
 
+            {/* Edit Bar */}
+            {editingMsgId && (
+              <div className="border-t border-primary/30 bg-primary/5 px-3 py-2 flex items-center gap-2">
+                <Pencil className="h-4 w-4 text-primary shrink-0" />
+                <span className="text-xs text-primary font-medium">Tahrirlash</span>
+                <button onClick={cancelEdit} className="ml-auto text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
             {/* Input Bar */}
             <div className="glass border-t border-border/30 px-3 py-2.5 relative">
               <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" />
@@ -696,32 +847,43 @@ export default function ChatPage() {
                 )}
               </AnimatePresence>
 
-              <form onSubmit={sendMessage} className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => { setShowAttachMenu(!showAttachMenu); setShowEmoji(false); }}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-primary hover:bg-primary/10 active:scale-95"
-                >
-                  <Paperclip className="h-[18px] w-[18px]" />
-                </button>
+              <form onSubmit={editingMsgId ? (e) => { e.preventDefault(); saveEdit(); } : sendMessage} className="flex items-center gap-1.5">
+                {!editingMsgId && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowAttachMenu(!showAttachMenu); setShowEmoji(false); }}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-primary hover:bg-primary/10 active:scale-95"
+                  >
+                    <Paperclip className="h-[18px] w-[18px]" />
+                  </button>
+                )}
 
                 <input
                   type="text"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Xabar yozing..."
+                  value={editingMsgId ? editContent : newMessage}
+                  onChange={(e) => editingMsgId ? setEditContent(e.target.value) : setNewMessage(e.target.value)}
+                  placeholder={editingMsgId ? "Xabarni tahrirlang..." : "Xabar yozing..."}
                   className="flex-1 rounded-xl bg-secondary/80 px-4 py-2.5 text-sm text-foreground outline-none ring-1 ring-border/50 transition-all focus:ring-primary/50 focus:bg-secondary placeholder:text-muted-foreground"
                 />
 
-                <button
-                  type="button"
-                  onClick={() => { setShowEmoji(!showEmoji); setShowAttachMenu(false); }}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-primary hover:bg-primary/10 active:scale-95"
-                >
-                  <Smile className="h-[18px] w-[18px]" />
-                </button>
+                {!editingMsgId && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowEmoji(!showEmoji); setShowAttachMenu(false); }}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-primary hover:bg-primary/10 active:scale-95"
+                  >
+                    <Smile className="h-[18px] w-[18px]" />
+                  </button>
+                )}
 
-                {newMessage.trim() ? (
+                {editingMsgId ? (
+                  <button
+                    type="submit"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:shadow-[0_0_20px_-4px_hsl(var(--primary)/0.4)] active:scale-95"
+                  >
+                    <Check className="h-4 w-4" />
+                  </button>
+                ) : newMessage.trim() ? (
                   <button
                     type="submit"
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:shadow-[0_0_20px_-4px_hsl(var(--primary)/0.4)] active:scale-95"
