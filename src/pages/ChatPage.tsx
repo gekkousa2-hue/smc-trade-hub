@@ -55,10 +55,13 @@ export default function ChatPage() {
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
+    // Update scroll-to-bottom button visibility
+    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 200;
+    setShowScrollBtn(!nearBottom);
+    // Infinite scroll up
     if (container.scrollTop < 80 && state.hasMore && !state.isLoadingMore) {
       const prevHeight = container.scrollHeight;
       state.loadMoreMessages();
-      // Restore scroll position after loading
       requestAnimationFrame(() => {
         if (scrollContainerRef.current) {
           scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight - prevHeight;
