@@ -67,23 +67,23 @@ export default function ChatPage() {
     }
   }, [state.hasMore, state.isLoadingMore, state.loadMoreMessages]);
 
-  /* ─── Show scroll-to-bottom button ─── */
-  const isNearBottom = useCallback(() => {
+  /* ─── Track scroll position for scroll-to-bottom button ─── */
+  const updateScrollBtn = useCallback(() => {
     const c = scrollContainerRef.current;
-    if (!c) return true;
-    return c.scrollHeight - c.scrollTop - c.clientHeight < 200;
+    if (!c) return;
+    const nearBottom = c.scrollHeight - c.scrollTop - c.clientHeight < 200;
+    setShowScrollBtn(!nearBottom);
   }, []);
 
-  /* ─── Long press handler ─── */
+  /* ─── Long press handler (for ALL messages) ─── */
   const handlePointerDown = useCallback((e: React.PointerEvent, msg: Message) => {
-    if (msg.sender_id !== state.user?.id) return;
     if (msg.id.startsWith("temp-")) return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     longPressTimerRef.current = setTimeout(() => {
       state.setContextMenuMsgId(msg.id);
       state.setContextMenuPos({ x: rect.left + rect.width / 2, y: rect.top });
     }, 500);
-  }, [state.user]);
+  }, [state]);
 
   const handlePointerUp = useCallback(() => {
     if (longPressTimerRef.current) {
