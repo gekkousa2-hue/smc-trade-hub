@@ -1,7 +1,7 @@
-import { useRef, useState, memo } from "react";
+import { useRef, useState, memo, forwardRef } from "react";
 import { Play, Pause } from "lucide-react";
 
-export const VideoMessage = memo(function VideoMessage({ src }: { src: string }) {
+export const VideoMessage = memo(forwardRef<HTMLDivElement, { src: string }>(function VideoMessage({ src }, ref) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
 
@@ -17,6 +17,7 @@ export const VideoMessage = memo(function VideoMessage({ src }: { src: string })
 
   return (
     <div
+      ref={ref}
       onClick={toggle}
       className="relative h-44 w-44 cursor-pointer rounded-full overflow-hidden bg-transparent shadow-[0_8px_32px_-8px_hsl(var(--primary)/0.45),0_0_0_1px_hsl(var(--primary)/0.15)] ring-1 ring-primary/20 transition-transform active:scale-[0.98]"
       style={{ aspectRatio: "1 / 1" }}
@@ -38,11 +39,6 @@ export const VideoMessage = memo(function VideoMessage({ src }: { src: string })
           </div>
         </div>
       )}
-      {playing && (
-        <div className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-background/60 backdrop-blur-md opacity-0 hover:opacity-100 transition-opacity">
-          <Pause className="h-3 w-3 fill-primary text-primary" />
-        </div>
-      )}
     </div>
   );
-});
+}));
