@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageSquare, ArrowDown, Loader2 } from "lucide-react";
 import { useChatState, type Message } from "@/hooks/useChatState";
@@ -8,7 +8,6 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { ContextMenu } from "@/components/chat/ContextMenu";
 import { MessageSkeleton } from "@/components/chat/SkeletonLoaders";
-import { supabase } from "@/integrations/supabase/client";
 
 export default function ChatPage() {
   const state = useChatState();
