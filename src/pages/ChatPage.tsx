@@ -20,9 +20,36 @@ export default function ChatPage() {
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const scrollToBottom = useCallback(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const lastMessageCountRef = useRef(0);
+
+  const scrollToBottom = useCallback((smooth = true) => {
+    bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
   }, []);
+
+  /* ─── Auto-scroll on new messages if near bottom ─── */
+  useEffect(() => {
+    const c = scrollContainerRef.current;
+    if (!c) return;
+    const prevCount = lastMessageCountRef.current;
+    const currCount = state.messages.length;
+    lastMessageCountRef.current = currCount;
+    if (currCount === 0) return;
+    // First load — jump to bottom
+    if (prevCount === 0) {
+      requestAnimationFrame(() => scrollToBottom(false));
+      return;
+    }
+    // New message arrived
+    if (currCount > prevCount) {
+      const nearBottom = c.scrollHeight - c.scrollTop - c.clientHeight < 200;
+      const lastMsg = state.messages[currCount - 1];
+      const isOwnMsg = lastMsg.sender_id === state.user?.id;
+      if (nearBottom || isOwnMsg) {
+        requestAnimationFrame(() => scrollToBottom(true));
+      }
+    }
+  }, [state.messages, state.user, scrollToBottom]);
 
   /* ─── Infinite scroll ─── */
   const handleScroll = useCallback(() => {
