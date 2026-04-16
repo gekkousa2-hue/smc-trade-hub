@@ -259,6 +259,7 @@ export default function ChatPage() {
                 contextMenuMsgId={state.contextMenuMsgId}
                 contextMenuPos={state.contextMenuPos}
                 messages={state.messages}
+                currentUserId={state.user?.id}
                 onStartEditing={state.startEditing}
                 onDelete={state.deleteMessage}
                 onTogglePin={state.togglePin}
@@ -268,12 +269,12 @@ export default function ChatPage() {
 
             {/* Scroll to bottom button */}
             <AnimatePresence>
-              {scrollContainerRef.current && !isNearBottom() && (
+              {showScrollBtn && (
                 <motion.button
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
-                  onClick={scrollToBottom}
+                  onClick={() => scrollToBottom(true)}
                   className="absolute bottom-20 right-4 z-30 flex h-10 w-10 items-center justify-center rounded-full glass border border-border/40 shadow-lg transition-colors hover:bg-primary/10"
                 >
                   <ArrowDown className="h-4 w-4 text-primary" />
