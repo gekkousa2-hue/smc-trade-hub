@@ -1,20 +1,46 @@
 import { useRef, useState, memo } from "react";
-import { Play } from "lucide-react";
+import { Play, Pause } from "lucide-react";
 
 export const VideoMessage = memo(function VideoMessage({ src }: { src: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
+
   const toggle = () => {
     if (!videoRef.current) return;
-    if (playing) videoRef.current.pause(); else videoRef.current.play();
+    if (playing) {
+      videoRef.current.pause();
+    } else {
+      videoRef.current.play();
+    }
     setPlaying(!playing);
   };
+
   return (
-    <div className="relative w-36 h-36 rounded-full overflow-hidden cursor-pointer border-2 border-primary/40" onClick={toggle}>
-      <video ref={videoRef} src={src} className="w-full h-full object-cover" playsInline loop onEnded={() => setPlaying(false)} />
+    <div
+      onClick={toggle}
+      className="relative h-44 w-44 cursor-pointer rounded-full overflow-hidden bg-transparent shadow-[0_8px_32px_-8px_hsl(var(--primary)/0.45),0_0_0_1px_hsl(var(--primary)/0.15)] ring-1 ring-primary/20 transition-transform active:scale-[0.98]"
+      style={{ aspectRatio: "1 / 1" }}
+    >
+      <video
+        ref={videoRef}
+        src={src}
+        className="absolute inset-0 h-full w-full object-cover rounded-full"
+        playsInline
+        loop
+        onEnded={() => setPlaying(false)}
+        onPause={() => setPlaying(false)}
+        onPlay={() => setPlaying(true)}
+      />
       {!playing && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background/30">
-          <Play className="h-8 w-8 text-primary drop-shadow" />
+        <div className="absolute inset-0 flex items-center justify-center rounded-full bg-background/20 backdrop-blur-[1px]">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-background/60 backdrop-blur-md">
+            <Play className="h-5 w-5 fill-primary text-primary" />
+          </div>
+        </div>
+      )}
+      {playing && (
+        <div className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-background/60 backdrop-blur-md opacity-0 hover:opacity-100 transition-opacity">
+          <Pause className="h-3 w-3 fill-primary text-primary" />
         </div>
       )}
     </div>
