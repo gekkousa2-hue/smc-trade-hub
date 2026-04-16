@@ -71,13 +71,17 @@ export const MessageBubble = memo(function MessageBubble({ msg, isOwn, isSending
           </div>
         )}
 
-        <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed backdrop-blur-sm ${
-          isOwn
-            ? "rounded-br-sm bg-primary/90 text-primary-foreground shadow-[0_2px_16px_-4px_hsl(var(--primary)/0.35)]"
-            : "rounded-bl-sm bg-secondary/70 border border-border/40 text-foreground"
-        }`}>
-          {renderContent(msg)}
-        </div>
+        {msg.media_type === "video" && msg.media_url ? (
+          <div className="py-1">{renderContent(msg)}</div>
+        ) : (
+          <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed backdrop-blur-sm ${
+            isOwn
+              ? "rounded-br-sm bg-primary/90 text-primary-foreground shadow-[0_2px_16px_-4px_hsl(var(--primary)/0.35)]"
+              : "rounded-bl-sm bg-secondary/70 border border-border/40 text-foreground"
+          }`}>
+            {renderContent(msg)}
+          </div>
+        )}
         <div className={`flex items-center gap-1 mt-0.5 ${isOwn ? "flex-row-reverse" : ""}`}>
           <span className="font-mono text-[10px] text-muted-foreground/50">{formatTime(msg.created_at)}</span>
           {msg.edited_at && <span className="font-mono text-[9px] text-muted-foreground/40">tahrirlangan</span>}
