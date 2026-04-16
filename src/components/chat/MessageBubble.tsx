@@ -1,4 +1,4 @@
-import { memo, forwardRef } from "react";
+import { memo } from "react";
 import { motion } from "framer-motion";
 import { Check, CheckCheck, FileText, Pin, Reply } from "lucide-react";
 import { AudioPlayer } from "./AudioPlayer";
@@ -32,23 +32,19 @@ function renderContent(msg: Message) {
   return <span>{msg.content}</span>;
 }
 
-const StatusIcon = forwardRef<SVGSVGElement, { msg: Message; isSending: boolean }>(
-  function StatusIcon({ msg, isSending }, ref) {
-    if (isSending) return <Check ref={ref} className="h-3 w-3 text-muted-foreground/40" />;
-    if (msg.status === "read") return <CheckCheck ref={ref} className="h-3 w-3 text-[hsl(210_80%_55%)]" />;
-    if (msg.status === "delivered") return <CheckCheck ref={ref} className="h-3 w-3 text-primary/70" />;
-    return <Check ref={ref} className="h-3 w-3 text-primary/70" />;
-  }
-);
+function StatusIcon({ msg, isSending }: { msg: Message; isSending: boolean }) {
+  if (isSending) return <Check className="h-3 w-3 text-muted-foreground/40" />;
+  if (msg.status === "read") return <CheckCheck className="h-3 w-3 text-[hsl(210_80%_55%)]" />;
+  if (msg.status === "delivered") return <CheckCheck className="h-3 w-3 text-primary/70" />;
+  return <Check className="h-3 w-3 text-primary/70" />;
+}
 
-export const MessageBubble = memo(forwardRef<HTMLDivElement, Props>(function MessageBubble(
-  { msg, isOwn, isSending, onContextMenu, onPointerDown, onPointerUp },
-  ref
+export const MessageBubble = memo(function MessageBubble(
+  { msg, isOwn, isSending, onContextMenu, onPointerDown, onPointerUp }: Props
 ) {
   const isVideo = msg.media_type === "video" && msg.media_url;
   return (
     <motion.div
-      ref={ref}
       layout
       initial={{ opacity: 0, y: 6, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -97,4 +93,4 @@ export const MessageBubble = memo(forwardRef<HTMLDivElement, Props>(function Mes
       </div>
     </motion.div>
   );
-}));
+});

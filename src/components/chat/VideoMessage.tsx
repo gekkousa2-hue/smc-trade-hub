@@ -1,7 +1,7 @@
-import { useRef, useState, memo, forwardRef } from "react";
-import { Play, Pause } from "lucide-react";
+import { useRef, useState, memo } from "react";
+import { Play } from "lucide-react";
 
-export const VideoMessage = memo(forwardRef<HTMLDivElement, { src: string }>(function VideoMessage({ src }, ref) {
+export const VideoMessage = memo(function VideoMessage({ src }: { src: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
 
@@ -17,7 +17,6 @@ export const VideoMessage = memo(forwardRef<HTMLDivElement, { src: string }>(fun
 
   return (
     <div
-      ref={ref}
       onClick={toggle}
       className="relative h-44 w-44 cursor-pointer rounded-full overflow-hidden bg-transparent shadow-[0_8px_32px_-8px_hsl(var(--primary)/0.45),0_0_0_1px_hsl(var(--primary)/0.15)] ring-1 ring-primary/20 transition-transform active:scale-[0.98]"
       style={{ aspectRatio: "1 / 1" }}
@@ -41,4 +40,4 @@ export const VideoMessage = memo(forwardRef<HTMLDivElement, { src: string }>(fun
       )}
     </div>
   );
-}));
+});

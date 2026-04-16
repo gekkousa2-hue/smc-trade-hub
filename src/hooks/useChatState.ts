@@ -72,6 +72,7 @@ export function useChatState() {
 
   const tempToRealId = useRef<Map<string, string>>(new Map());
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const activeConversationIdRef = useRef<string | null>(null);
 
   /* ─── Auth ─── */
   useEffect(() => {
@@ -172,6 +173,7 @@ export function useChatState() {
   }, []);
 
   useEffect(() => {
+    activeConversationIdRef.current = activeConversationId;
     if (!activeConversationId) { setMessages([]); return; }
     setHasMore(true);
     fetchMessages(activeConversationId);
@@ -243,12 +245,20 @@ export function useChatState() {
     return () => { supabase.removeChannel(channel); };
   }, [activeConversationId, fetchConversations, user]);
 
-  /* ─── Real-time conversations ─── */
+  /* ─── Real-time conversations + global new messages (sidebar refresh) ─── */
   useEffect(() => {
     if (!user) return;
     const channel = supabase
-      .channel("conversations-realtime")
+      .channel(`global-${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "conversations" }, () => fetchConversations())
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversations" }, () => fetchConversations())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+        const msg = payload.new as any;
+        // If message belongs to another open conversation, append it (active channel handles current one)
+        if (msg.conversation_id !== activeConversationIdRef.current) {
+          fetchConversations();
+        }
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user, fetchConversations]);
