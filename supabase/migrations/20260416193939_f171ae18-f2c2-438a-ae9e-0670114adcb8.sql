@@ -1,0 +1,3 @@
+ALTER TABLE public.messages REPLICA IDENTITY FULL;
+ALTER TABLE public.conversations REPLICA IDENTITY FULL;
+ALTER TABLE public.typing_indicators REPLICA IDENTITY FULL;
