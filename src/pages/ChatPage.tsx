@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageSquare, ArrowDown, Loader2 } from "lucide-react";
 import { useChatState, type Message } from "@/hooks/useChatState";
@@ -8,7 +8,6 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { ContextMenu } from "@/components/chat/ContextMenu";
 import { MessageSkeleton } from "@/components/chat/SkeletonLoaders";
-import { supabase } from "@/integrations/supabase/client";
 
 export default function ChatPage() {
   const state = useChatState();
@@ -21,18 +20,48 @@ export default function ChatPage() {
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const scrollToBottom = useCallback(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const lastMessageCountRef = useRef(0);
+
+  const scrollToBottom = useCallback((smooth = true) => {
+    bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
   }, []);
+
+  /* ─── Auto-scroll on new messages if near bottom ─── */
+  useEffect(() => {
+    const c = scrollContainerRef.current;
+    if (!c) return;
+    const prevCount = lastMessageCountRef.current;
+    const currCount = state.messages.length;
+    lastMessageCountRef.current = currCount;
+    if (currCount === 0) return;
+    // First load — jump to bottom
+    if (prevCount === 0) {
+      requestAnimationFrame(() => scrollToBottom(false));
+      return;
+    }
+    // New message arrived
+    if (currCount > prevCount) {
+      const nearBottom = c.scrollHeight - c.scrollTop - c.clientHeight < 200;
+      const lastMsg = state.messages[currCount - 1];
+      const isOwnMsg = lastMsg.sender_id === state.user?.id;
+      if (nearBottom || isOwnMsg) {
+        requestAnimationFrame(() => scrollToBottom(true));
+      }
+    }
+  }, [state.messages, state.user, scrollToBottom]);
 
   /* ─── Infinite scroll ─── */
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
+    // Update scroll-to-bottom button visibility
+    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 200;
+    setShowScrollBtn(!nearBottom);
+    // Infinite scroll up
     if (container.scrollTop < 80 && state.hasMore && !state.isLoadingMore) {
       const prevHeight = container.scrollHeight;
       state.loadMoreMessages();
-      // Restore scroll position after loading
       requestAnimationFrame(() => {
         if (scrollContainerRef.current) {
           scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight - prevHeight;
@@ -41,23 +70,23 @@ export default function ChatPage() {
     }
   }, [state.hasMore, state.isLoadingMore, state.loadMoreMessages]);
 
-  /* ─── Show scroll-to-bottom button ─── */
-  const isNearBottom = useCallback(() => {
+  /* ─── Track scroll position for scroll-to-bottom button ─── */
+  const updateScrollBtn = useCallback(() => {
     const c = scrollContainerRef.current;
-    if (!c) return true;
-    return c.scrollHeight - c.scrollTop - c.clientHeight < 200;
+    if (!c) return;
+    const nearBottom = c.scrollHeight - c.scrollTop - c.clientHeight < 200;
+    setShowScrollBtn(!nearBottom);
   }, []);
 
-  /* ─── Long press handler ─── */
+  /* ─── Long press handler (for ALL messages) ─── */
   const handlePointerDown = useCallback((e: React.PointerEvent, msg: Message) => {
-    if (msg.sender_id !== state.user?.id) return;
     if (msg.id.startsWith("temp-")) return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     longPressTimerRef.current = setTimeout(() => {
       state.setContextMenuMsgId(msg.id);
       state.setContextMenuPos({ x: rect.left + rect.width / 2, y: rect.top });
     }, 500);
-  }, [state.user]);
+  }, [state]);
 
   const handlePointerUp = useCallback(() => {
     if (longPressTimerRef.current) {
@@ -233,6 +262,7 @@ export default function ChatPage() {
                 contextMenuMsgId={state.contextMenuMsgId}
                 contextMenuPos={state.contextMenuPos}
                 messages={state.messages}
+                currentUserId={state.user?.id}
                 onStartEditing={state.startEditing}
                 onDelete={state.deleteMessage}
                 onTogglePin={state.togglePin}
@@ -242,12 +272,12 @@ export default function ChatPage() {
 
             {/* Scroll to bottom button */}
             <AnimatePresence>
-              {scrollContainerRef.current && !isNearBottom() && (
+              {showScrollBtn && (
                 <motion.button
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
-                  onClick={scrollToBottom}
+                  onClick={() => scrollToBottom(true)}
                   className="absolute bottom-20 right-4 z-30 flex h-10 w-10 items-center justify-center rounded-full glass border border-border/40 shadow-lg transition-colors hover:bg-primary/10"
                 >
                   <ArrowDown className="h-4 w-4 text-primary" />

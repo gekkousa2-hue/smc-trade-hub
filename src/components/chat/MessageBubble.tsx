@@ -1,4 +1,4 @@
-import { memo, useRef } from "react";
+import { memo, forwardRef } from "react";
 import { motion } from "framer-motion";
 import { Check, CheckCheck, FileText, Pin, Reply } from "lucide-react";
 import { AudioPlayer } from "./AudioPlayer";
@@ -32,16 +32,23 @@ function renderContent(msg: Message) {
   return <span>{msg.content}</span>;
 }
 
-function StatusIcon({ msg, isSending }: { msg: Message; isSending: boolean }) {
-  if (isSending) return <Check className="h-3 w-3 text-muted-foreground/40" />;
-  if (msg.status === "read") return <CheckCheck className="h-3 w-3 text-[hsl(210_80%_55%)]" />;
-  if (msg.status === "delivered") return <CheckCheck className="h-3 w-3 text-primary/70" />;
-  return <Check className="h-3 w-3 text-primary/70" />;
-}
+const StatusIcon = forwardRef<SVGSVGElement, { msg: Message; isSending: boolean }>(
+  function StatusIcon({ msg, isSending }, ref) {
+    if (isSending) return <Check ref={ref} className="h-3 w-3 text-muted-foreground/40" />;
+    if (msg.status === "read") return <CheckCheck ref={ref} className="h-3 w-3 text-[hsl(210_80%_55%)]" />;
+    if (msg.status === "delivered") return <CheckCheck ref={ref} className="h-3 w-3 text-primary/70" />;
+    return <Check ref={ref} className="h-3 w-3 text-primary/70" />;
+  }
+);
 
-export const MessageBubble = memo(function MessageBubble({ msg, isOwn, isSending, onContextMenu, onPointerDown, onPointerUp }: Props) {
+export const MessageBubble = memo(forwardRef<HTMLDivElement, Props>(function MessageBubble(
+  { msg, isOwn, isSending, onContextMenu, onPointerDown, onPointerUp },
+  ref
+) {
+  const isVideo = msg.media_type === "video" && msg.media_url;
   return (
     <motion.div
+      ref={ref}
       layout
       initial={{ opacity: 0, y: 6, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -53,7 +60,7 @@ export const MessageBubble = memo(function MessageBubble({ msg, isOwn, isSending
         onPointerDown={(e) => onPointerDown(e, msg)}
         onPointerUp={onPointerUp}
         onPointerLeave={onPointerUp}
-        onContextMenu={(e) => { if (isOwn && !msg.id.startsWith("temp-")) { e.preventDefault(); onContextMenu(e, msg); } }}
+        onContextMenu={(e) => { if (!msg.id.startsWith("temp-")) { e.preventDefault(); onContextMenu(e, msg); } }}
       >
         {/* Reply preview */}
         {msg.reply_to && (
@@ -71,7 +78,7 @@ export const MessageBubble = memo(function MessageBubble({ msg, isOwn, isSending
           </div>
         )}
 
-        {msg.media_type === "video" && msg.media_url ? (
+        {isVideo ? (
           <div className="py-1">{renderContent(msg)}</div>
         ) : (
           <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed backdrop-blur-sm ${
@@ -90,4 +97,4 @@ export const MessageBubble = memo(function MessageBubble({ msg, isOwn, isSending
       </div>
     </motion.div>
   );
-});
+}));
