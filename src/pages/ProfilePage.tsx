@@ -176,17 +176,6 @@ export default function ProfilePage() {
           </button>
 
           <button
-            onClick={() => setShowHistory(true)}
-            className="flex w-full items-center gap-3 premium-card rounded-2xl px-4 py-4 transition-all duration-200 hover:border-primary/30 hover:shadow-[0_0_20px_-8px_hsl(var(--primary)/0.4)] active:scale-[0.98]"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
-              <History className="h-[18px] w-[18px] text-primary" />
-            </div>
-            <span className="text-sm font-semibold text-foreground flex-1 text-left">Savdo tarixi</span>
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          </button>
-
-          <button
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-2xl bg-destructive/10 border border-destructive/30 px-4 py-4 transition-all duration-200 hover:bg-destructive/20 hover:shadow-[0_0_20px_-8px_hsl(var(--destructive)/0.5)] active:scale-[0.98]"
           >
