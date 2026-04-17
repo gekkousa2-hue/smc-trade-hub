@@ -223,28 +223,34 @@ export function useChatState() {
         filter: `conversation_id=eq.${activeConversationId}`,
       }, async (payload) => {
         const newId = payload.new.id as string;
-        if (tempToRealId.current.has(newId)) {
+        // If we already have this real ID (from optimistic-replace), ignore
+        const tempId = tempToRealId.current.get(newId);
+        if (tempId) {
           tempToRealId.current.delete(newId);
           return;
         }
-        const { data: profile } = await supabase.from("profiles").select("username, avatar_url").eq("user_id", payload.new.sender_id).single();
+        const senderId = payload.new.sender_id as string;
+        let profile = null;
+        if (user && senderId !== user.id) {
+          const { data } = await supabase.from("profiles").select("username, avatar_url").eq("user_id", senderId).single();
+          profile = data;
+        }
         const newMsg: Message = { ...(payload.new as any), profiles: profile };
         setMessages(prev => {
           if (prev.some(m => m.id === newMsg.id)) return prev;
-          return [...prev, newMsg];
+          return mergeMessages(prev, [newMsg]);
         });
-        // Mark as read if from other user
-        if (user && payload.new.sender_id !== user.id) {
-          await supabase.from("messages").update({ status: "read" } as any).eq("id", newId);
+        // If from other user → mark as delivered immediately, then read (since chat is open)
+        if (user && senderId !== user.id) {
+          // Fire-and-forget — don't block UI
+          supabase.from("messages").update({ status: "read" } as any).eq("id", newId).then();
         }
-        fetchConversations();
       })
       .on("postgres_changes", {
         event: "DELETE", schema: "public", table: "messages",
         filter: `conversation_id=eq.${activeConversationId}`,
       }, (payload) => {
         setMessages(prev => prev.filter(m => m.id !== (payload.old as any).id));
-        fetchConversations();
       })
       .on("postgres_changes", {
         event: "UPDATE", schema: "public", table: "messages",
@@ -258,7 +264,7 @@ export function useChatState() {
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [activeConversationId, fetchConversations, user]);
+  }, [activeConversationId, user]);
 
   /* ─── Real-time conversations + global new messages (sidebar refresh) ─── */
   useEffect(() => {
