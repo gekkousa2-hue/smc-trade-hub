@@ -124,7 +124,6 @@ export default function ProfilePage() {
           {/* Decorative gold gradient */}
           <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
           <div className="relative">
-            <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-[0.2em] mb-2">Umumiy Balans</p>
             <div className="flex items-end justify-between">
               <span className="text-4xl font-bold text-gradient-gold font-display tracking-tight">
                 ${mockBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
@@ -173,17 +172,6 @@ export default function ProfilePage() {
               <Settings className="h-[18px] w-[18px] text-primary" />
             </div>
             <span className="text-sm font-semibold text-foreground flex-1 text-left">Sozlamalar</span>
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          </button>
-
-          <button
-            onClick={() => setShowHistory(true)}
-            className="flex w-full items-center gap-3 premium-card rounded-2xl px-4 py-4 transition-all duration-200 hover:border-primary/30 hover:shadow-[0_0_20px_-8px_hsl(var(--primary)/0.4)] active:scale-[0.98]"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
-              <History className="h-[18px] w-[18px] text-primary" />
-            </div>
-            <span className="text-sm font-semibold text-foreground flex-1 text-left">Savdo tarixi</span>
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </button>
 
