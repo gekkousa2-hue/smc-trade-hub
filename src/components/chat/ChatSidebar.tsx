@@ -1,7 +1,8 @@
 import { memo } from "react";
 import { Search, MessagesSquare, MessageSquare, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getInitials, getAvatarColor, formatTime } from "./ChatHelpers";
+import { formatTime } from "./ChatHelpers";
+import { UserAvatar } from "@/components/UserAvatar";
 import { ConversationSkeleton } from "./SkeletonLoaders";
 import type { Profile, Conversation } from "@/hooks/useChatState";
 
@@ -64,14 +65,7 @@ export const ChatSidebar = memo(function ChatSidebar({
                 onClick={() => onOpenConversation(profile.user_id)}
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition-all hover:bg-secondary/80 active:scale-[0.98]"
               >
-                <div className="relative">
-                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${getAvatarColor(profile.user_id)}`}>
-                    {getInitials(profile.username)}
-                  </div>
-                  {profile.is_online && (
-                    <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-[hsl(142_60%_45%)] border-2 border-background" />
-                  )}
-                </div>
+                <UserAvatar userId={profile.user_id} username={profile.username} avatarUrl={profile.avatar_url} size="md" online={profile.is_online} />
                 <div className="text-left">
                   <p className="text-sm font-medium text-foreground">{profile.username}</p>
                   <p className="text-xs text-primary/70 font-mono">Xabar yozish →</p>
@@ -94,35 +88,32 @@ export const ChatSidebar = memo(function ChatSidebar({
                 <button
                   key={conv.id}
                   onClick={() => onSelectConversation(conv.id)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 mb-0.5 transition-all active:scale-[0.98] ${
+                  className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 mb-1 transition-all active:scale-[0.98] ${
                     activeConversationId === conv.id
-                      ? "bg-primary/10 ring-1 ring-primary/20"
-                      : "hover:bg-secondary/60"
+                      ? "bg-primary/10 ring-1 ring-primary/30 shadow-[0_0_16px_-6px_hsl(var(--primary)/0.4)]"
+                      : "hover:bg-secondary/50"
                   }`}
                 >
-                  <div className="relative">
-                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${getAvatarColor(conv.other_user?.user_id || "")}`}>
-                      {getInitials(conv.other_user?.username || "?")}
-                    </div>
-                    {conv.other_user?.is_online && (
-                      <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-[hsl(142_60%_45%)] border-2 border-background" />
-                    )}
-                  </div>
+                  <UserAvatar userId={conv.other_user?.user_id || ""} username={conv.other_user?.username || "?"} avatarUrl={conv.other_user?.avatar_url} size="md" online={conv.other_user?.is_online} />
                   <div className="flex-1 min-w-0 text-left">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-foreground truncate">{conv.other_user?.username || "Noma'lum"}</p>
+                      <p className="text-sm font-semibold text-foreground truncate">{conv.other_user?.username || "Noma'lum"}</p>
                       <div className="flex items-center gap-1.5 ml-2 shrink-0">
-                        {(conv.unread_count ?? 0) > 0 && (
-                          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
-                            {conv.unread_count}
-                          </span>
-                        )}
                         {conv.last_message_at && (
                           <span className="font-mono text-[10px] text-muted-foreground/60">{formatTime(conv.last_message_at)}</span>
                         )}
                       </div>
                     </div>
-                    {conv.last_message && <p className="text-xs text-muted-foreground truncate mt-0.5">{conv.last_message}</p>}
+                    <div className="flex items-center justify-between mt-0.5 gap-2">
+                      {conv.last_message ? (
+                        <p className="text-xs text-muted-foreground truncate flex-1">{conv.last_message}</p>
+                      ) : <span className="flex-1" />}
+                      {(conv.unread_count ?? 0) > 0 && (
+                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground shadow-[0_0_10px_hsl(45_93%_58%/0.5)]">
+                          {conv.unread_count}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </button>
               ))
