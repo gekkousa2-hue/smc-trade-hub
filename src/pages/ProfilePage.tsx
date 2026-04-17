@@ -124,7 +124,6 @@ export default function ProfilePage() {
           {/* Decorative gold gradient */}
           <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
           <div className="relative">
-            <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-[0.2em] mb-2">Umumiy Balans</p>
             <div className="flex items-end justify-between">
               <span className="text-4xl font-bold text-gradient-gold font-display tracking-tight">
                 ${mockBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
