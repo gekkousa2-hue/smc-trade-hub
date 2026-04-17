@@ -369,6 +369,47 @@ export function useChatState() {
     return data.publicUrl;
   };
 
+  // Internal: persist a message with retry/backoff
+  const persistMessage = async (
+    tempId: string,
+    payload: { content: string; mediaUrl?: string | null; mediaType?: string | null; replyToId?: string | null },
+    convId: string
+  ) => {
+    if (!user) return;
+    const insertData: any = {
+      sender_id: user.id,
+      conversation_id: convId,
+      content: payload.content || "",
+      status: "sent",
+    };
+    if (payload.mediaUrl) { insertData.media_url = payload.mediaUrl; insertData.media_type = payload.mediaType; }
+    if (payload.replyToId) insertData.reply_to_id = payload.replyToId;
+
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const { data, error } = await supabase.from("messages").insert(insertData).select("id, created_at").single();
+        if (error) throw error;
+        tempToRealId.current.set(data.id, tempId);
+        setSendingIds(prev => { const s = new Set(prev); s.delete(tempId); return s; });
+        setMessages(prev => prev.map(m =>
+          m.id === tempId ? { ...m, id: data.id, status: "sent", created_at: data.created_at, failed: false, _retryPayload: undefined } : m
+        ));
+        return;
+      } catch (err) {
+        if (attempt === MAX_ATTEMPTS) {
+          setSendingIds(prev => { const s = new Set(prev); s.delete(tempId); return s; });
+          setMessages(prev => prev.map(m =>
+            m.id === tempId ? { ...m, status: "failed", failed: true, _retryPayload: payload } : m
+          ));
+          console.error("Xabar yuborishda xatolik (3 urinishdan keyin):", err);
+          return;
+        }
+        await new Promise(r => setTimeout(r, 400 * attempt * attempt));
+      }
+    }
+  };
+
   const sendMessage = async (e?: React.FormEvent, mediaUrl?: string, mediaType?: string) => {
     if (e) e.preventDefault();
     const content = newMessage.trim();
@@ -376,6 +417,7 @@ export function useChatState() {
     if (!user || !activeConversationId) return;
 
     const tempId = `temp-${Date.now()}-${Math.random()}`;
+    const currentReplyTo = replyTo;
     setNewMessage("");
     setShowEmoji(false);
     sendTyping(false);
@@ -390,36 +432,28 @@ export function useChatState() {
       media_url: mediaUrl,
       media_type: mediaType,
       status: "sending",
-      reply_to_id: replyTo?.id || null,
-      reply_to: replyTo,
+      reply_to_id: currentReplyTo?.id || null,
+      reply_to: currentReplyTo,
       profiles: null,
     };
     setSendingIds(prev => new Set(prev).add(tempId));
-    setMessages(prev => [...prev, optimisticMsg]);
+    setMessages(prev => mergeMessages(prev, [optimisticMsg]));
     setReplyTo(null);
 
-    try {
-      const insertData: any = {
-        sender_id: user.id,
-        conversation_id: activeConversationId,
-        content: content || "",
-        status: "sent",
-      };
-      if (mediaUrl) { insertData.media_url = mediaUrl; insertData.media_type = mediaType; }
-      if (replyTo) insertData.reply_to_id = replyTo.id;
-      const { data, error } = await supabase.from("messages").insert(insertData).select("id").single();
-      if (error) throw error;
-      tempToRealId.current.set(data.id, tempId);
-      setSendingIds(prev => { const s = new Set(prev); s.delete(tempId); return s; });
-      setConfirmedIds(prev => new Set(prev).add(tempId));
-      setMessages(prev => prev.map(m => (m.id === tempId ? { ...m, id: data.id, status: "sent" } : m)));
-      setConfirmedIds(prev => { const s = new Set(prev); s.delete(tempId); s.add(data.id); return s; });
-      fetchConversations();
-    } catch (err) {
-      setSendingIds(prev => { const s = new Set(prev); s.delete(tempId); return s; });
-      setMessages(prev => prev.filter(m => m.id !== tempId));
-      console.error("Xabar yuborishda xatolik:", err);
-    }
+    await persistMessage(tempId, {
+      content,
+      mediaUrl,
+      mediaType,
+      replyToId: currentReplyTo?.id || null,
+    }, activeConversationId);
+  };
+
+  const retryMessage = async (tempId: string) => {
+    const msg = messages.find(m => m.id === tempId);
+    if (!msg || !msg._retryPayload || !msg.conversation_id) return;
+    setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: "sending", failed: false } : m));
+    setSendingIds(prev => new Set(prev).add(tempId));
+    await persistMessage(tempId, msg._retryPayload, msg.conversation_id);
   };
 
   const deleteMessage = async (msgId: string) => {
