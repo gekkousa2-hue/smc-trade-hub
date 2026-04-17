@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { motion } from "framer-motion";
-import { Check, CheckCheck, FileText, Pin, Reply } from "lucide-react";
+import { Check, CheckCheck, FileText, Pin, Reply, AlertCircle, RotateCw, Loader2 } from "lucide-react";
 import { AudioPlayer } from "./AudioPlayer";
 import { VideoMessage } from "./VideoMessage";
 import { formatTime } from "./ChatHelpers";
@@ -13,6 +13,7 @@ interface Props {
   onContextMenu: (e: React.MouseEvent | React.PointerEvent, msg: Message) => void;
   onPointerDown: (e: React.PointerEvent, msg: Message) => void;
   onPointerUp: () => void;
+  onRetry?: (tempId: string) => void;
 }
 
 function renderContent(msg: Message) {
@@ -33,16 +34,18 @@ function renderContent(msg: Message) {
 }
 
 function StatusIcon({ msg, isSending }: { msg: Message; isSending: boolean }) {
-  if (isSending) return <Check className="h-3 w-3 text-muted-foreground/40" />;
+  if (msg.failed) return <AlertCircle className="h-3 w-3 text-destructive" />;
+  if (isSending || msg.status === "sending") return <Loader2 className="h-3 w-3 text-muted-foreground/60 animate-spin" />;
   if (msg.status === "read") return <CheckCheck className="h-3 w-3 text-[hsl(210_80%_55%)]" />;
   if (msg.status === "delivered") return <CheckCheck className="h-3 w-3 text-primary/70" />;
   return <Check className="h-3 w-3 text-primary/70" />;
 }
 
 export const MessageBubble = memo(function MessageBubble(
-  { msg, isOwn, isSending, onContextMenu, onPointerDown, onPointerUp }: Props
+  { msg, isOwn, isSending, onContextMenu, onPointerDown, onPointerUp, onRetry }: Props
 ) {
   const isVideo = msg.media_type === "video" && msg.media_url;
+  const isFailed = !!msg.failed;
   return (
     <motion.div
       layout
@@ -58,7 +61,6 @@ export const MessageBubble = memo(function MessageBubble(
         onPointerLeave={onPointerUp}
         onContextMenu={(e) => { if (!msg.id.startsWith("temp-")) { e.preventDefault(); onContextMenu(e, msg); } }}
       >
-        {/* Reply preview */}
         {msg.reply_to && (
           <div className={`flex items-center gap-1.5 text-[11px] mb-1 px-2 py-1 rounded-lg ${isOwn ? "bg-primary/10" : "bg-secondary/50"} border-l-2 border-primary/50`}>
             <Reply className="h-3 w-3 text-primary/60" />
@@ -66,7 +68,6 @@ export const MessageBubble = memo(function MessageBubble(
           </div>
         )}
 
-        {/* Pin indicator */}
         {msg.is_pinned && (
           <div className="flex items-center gap-1 text-[10px] text-primary/60 mb-0.5">
             <Pin className="h-2.5 w-2.5" />
@@ -77,7 +78,9 @@ export const MessageBubble = memo(function MessageBubble(
         {isVideo ? (
           <div className="py-1">{renderContent(msg)}</div>
         ) : (
-          <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed backdrop-blur-sm ${
+          <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed backdrop-blur-sm transition-opacity ${
+            isFailed ? "opacity-70 ring-1 ring-destructive/40" : ""
+          } ${
             isOwn
               ? "rounded-br-sm bg-primary/90 text-primary-foreground shadow-[0_2px_16px_-4px_hsl(var(--primary)/0.35)]"
               : "rounded-bl-sm bg-secondary/70 border border-border/40 text-foreground"
@@ -89,6 +92,16 @@ export const MessageBubble = memo(function MessageBubble(
           <span className="font-mono text-[10px] text-muted-foreground/50">{formatTime(msg.created_at)}</span>
           {msg.edited_at && <span className="font-mono text-[9px] text-muted-foreground/40">tahrirlangan</span>}
           {isOwn && <StatusIcon msg={msg} isSending={isSending} />}
+          {isFailed && onRetry && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRetry(msg.id); }}
+              className="flex items-center gap-1 text-[10px] text-destructive hover:text-destructive/80 ml-1"
+              aria-label="Qayta yuborish"
+            >
+              <RotateCw className="h-3 w-3" />
+              <span>Qayta</span>
+            </button>
+          )}
         </div>
       </div>
     </motion.div>
