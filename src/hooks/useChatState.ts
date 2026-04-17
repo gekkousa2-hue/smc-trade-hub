@@ -506,7 +506,7 @@ export function useChatState() {
     setContextMenuMsgId, setContextMenuPos, setEditingMsgId, setEditContent, setReplyTo,
     // Actions
     openConversation, uploadMedia, sendMessage, deleteMessage, startEditing, saveEdit, cancelEdit,
-    togglePin, replyToMessage, loadMoreMessages, handleTyping, fetchConversations,
+    togglePin, replyToMessage, loadMoreMessages, handleTyping, fetchConversations, retryMessage,
     setSendingIds, setConfirmedIds, setMessages,
   };
 }
