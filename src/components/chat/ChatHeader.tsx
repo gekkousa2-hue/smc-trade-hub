@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { ArrowLeft } from "lucide-react";
-import { getInitials, getAvatarColor, formatLastSeen } from "./ChatHelpers";
+import { formatLastSeen } from "./ChatHelpers";
+import { UserAvatar } from "@/components/UserAvatar";
 import type { Conversation } from "@/hooks/useChatState";
 
 interface Props {
@@ -14,30 +15,29 @@ export const ChatHeader = memo(function ChatHeader({ conversation, otherTyping, 
   const isOnline = other?.is_online;
 
   return (
-    <header className="glass sticky top-0 z-40 flex items-center gap-3 px-4 py-3 border-b border-border/30">
+    <header className="sticky top-0 z-40 flex items-center gap-3 px-4 py-3 border-b border-border/30 bg-[hsl(220_22%_6%/0.85)] backdrop-blur-2xl">
       <button
         onClick={onBack}
-        className="flex md:hidden h-8 w-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground transition-colors hover:text-foreground active:scale-95"
+        className="flex md:hidden h-9 w-9 items-center justify-center rounded-xl bg-secondary/60 text-muted-foreground transition-all hover:text-primary hover:bg-primary/10 active:scale-95"
       >
         <ArrowLeft className="h-4 w-4" />
       </button>
-      <div className="relative">
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${getAvatarColor(other?.user_id || "")}`}>
-          {getInitials(other?.username || "?")}
-        </div>
-        {isOnline && (
-          <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-[hsl(142_60%_45%)] border-2 border-background" />
-        )}
-      </div>
-      <div className="min-w-0">
+      <UserAvatar
+        userId={other?.user_id || ""}
+        username={other?.username || "?"}
+        avatarUrl={other?.avatar_url}
+        size="sm"
+        online={isOnline}
+      />
+      <div className="min-w-0 flex-1">
         <h2 className="font-display text-sm font-bold text-foreground truncate">{other?.username || "Noma'lum"}</h2>
-        <p className="font-mono text-[10px] text-primary/60">
+        <p className="font-mono text-[10px]">
           {otherTyping ? (
             <span className="text-primary animate-pulse">yozmoqda...</span>
           ) : isOnline ? (
-            "Online"
+            <span className="text-[hsl(142_70%_48%)]">● online</span>
           ) : (
-            `oxirgi marta: ${formatLastSeen(other?.last_seen)}`
+            <span className="text-muted-foreground/70">{formatLastSeen(other?.last_seen)}</span>
           )}
         </p>
       </div>
