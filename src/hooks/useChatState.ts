@@ -37,6 +37,21 @@ export interface Message {
   edited_at?: string | null;
   profiles?: { username: string; avatar_url: string | null } | null;
   reply_to?: Message | null;
+  failed?: boolean;
+  _retryPayload?: { content: string; mediaUrl?: string | null; mediaType?: string | null; replyToId?: string | null };
+}
+
+// Sort & dedupe helper — guarantees correct order and no duplicates
+function mergeMessages(prev: Message[], incoming: Message[]): Message[] {
+  const map = new Map<string, Message>();
+  for (const m of prev) map.set(m.id, m);
+  for (const m of incoming) {
+    const existing = map.get(m.id);
+    map.set(m.id, existing ? { ...existing, ...m } : m);
+  }
+  return Array.from(map.values()).sort((a, b) =>
+    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
 }
 
 const PAGE_SIZE = 20;
@@ -208,28 +223,34 @@ export function useChatState() {
         filter: `conversation_id=eq.${activeConversationId}`,
       }, async (payload) => {
         const newId = payload.new.id as string;
-        if (tempToRealId.current.has(newId)) {
+        // If we already have this real ID (from optimistic-replace), ignore
+        const tempId = tempToRealId.current.get(newId);
+        if (tempId) {
           tempToRealId.current.delete(newId);
           return;
         }
-        const { data: profile } = await supabase.from("profiles").select("username, avatar_url").eq("user_id", payload.new.sender_id).single();
+        const senderId = payload.new.sender_id as string;
+        let profile = null;
+        if (user && senderId !== user.id) {
+          const { data } = await supabase.from("profiles").select("username, avatar_url").eq("user_id", senderId).single();
+          profile = data;
+        }
         const newMsg: Message = { ...(payload.new as any), profiles: profile };
         setMessages(prev => {
           if (prev.some(m => m.id === newMsg.id)) return prev;
-          return [...prev, newMsg];
+          return mergeMessages(prev, [newMsg]);
         });
-        // Mark as read if from other user
-        if (user && payload.new.sender_id !== user.id) {
-          await supabase.from("messages").update({ status: "read" } as any).eq("id", newId);
+        // If from other user → mark as delivered immediately, then read (since chat is open)
+        if (user && senderId !== user.id) {
+          // Fire-and-forget — don't block UI
+          supabase.from("messages").update({ status: "read" } as any).eq("id", newId).then();
         }
-        fetchConversations();
       })
       .on("postgres_changes", {
         event: "DELETE", schema: "public", table: "messages",
         filter: `conversation_id=eq.${activeConversationId}`,
       }, (payload) => {
         setMessages(prev => prev.filter(m => m.id !== (payload.old as any).id));
-        fetchConversations();
       })
       .on("postgres_changes", {
         event: "UPDATE", schema: "public", table: "messages",
@@ -243,25 +264,26 @@ export function useChatState() {
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [activeConversationId, fetchConversations, user]);
+  }, [activeConversationId, user]);
 
-  /* ─── Real-time conversations + global new messages (sidebar refresh) ─── */
+  /* ─── Real-time conversations + global new messages (sidebar refresh, debounced) ─── */
+  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const debouncedFetchConversations = useCallback(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => fetchConversations(), 250);
+  }, [fetchConversations]);
+
   useEffect(() => {
     if (!user) return;
     const channel = supabase
       .channel(`global-${user.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "conversations" }, () => fetchConversations())
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversations" }, () => fetchConversations())
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
-        const msg = payload.new as any;
-        // If message belongs to another open conversation, append it (active channel handles current one)
-        if (msg.conversation_id !== activeConversationIdRef.current) {
-          fetchConversations();
-        }
-      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "conversations" }, () => debouncedFetchConversations())
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversations" }, () => debouncedFetchConversations())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => debouncedFetchConversations())
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, () => debouncedFetchConversations())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user, fetchConversations]);
+  }, [user, debouncedFetchConversations]);
 
   /* ─── Typing indicator ─── */
   useEffect(() => {
@@ -348,6 +370,47 @@ export function useChatState() {
     return data.publicUrl;
   };
 
+  // Internal: persist a message with retry/backoff
+  const persistMessage = async (
+    tempId: string,
+    payload: { content: string; mediaUrl?: string | null; mediaType?: string | null; replyToId?: string | null },
+    convId: string
+  ) => {
+    if (!user) return;
+    const insertData: any = {
+      sender_id: user.id,
+      conversation_id: convId,
+      content: payload.content || "",
+      status: "sent",
+    };
+    if (payload.mediaUrl) { insertData.media_url = payload.mediaUrl; insertData.media_type = payload.mediaType; }
+    if (payload.replyToId) insertData.reply_to_id = payload.replyToId;
+
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const { data, error } = await supabase.from("messages").insert(insertData).select("id, created_at").single();
+        if (error) throw error;
+        tempToRealId.current.set(data.id, tempId);
+        setSendingIds(prev => { const s = new Set(prev); s.delete(tempId); return s; });
+        setMessages(prev => prev.map(m =>
+          m.id === tempId ? { ...m, id: data.id, status: "sent", created_at: data.created_at, failed: false, _retryPayload: undefined } : m
+        ));
+        return;
+      } catch (err) {
+        if (attempt === MAX_ATTEMPTS) {
+          setSendingIds(prev => { const s = new Set(prev); s.delete(tempId); return s; });
+          setMessages(prev => prev.map(m =>
+            m.id === tempId ? { ...m, status: "failed", failed: true, _retryPayload: payload } : m
+          ));
+          console.error("Xabar yuborishda xatolik (3 urinishdan keyin):", err);
+          return;
+        }
+        await new Promise(r => setTimeout(r, 400 * attempt * attempt));
+      }
+    }
+  };
+
   const sendMessage = async (e?: React.FormEvent, mediaUrl?: string, mediaType?: string) => {
     if (e) e.preventDefault();
     const content = newMessage.trim();
@@ -355,6 +418,7 @@ export function useChatState() {
     if (!user || !activeConversationId) return;
 
     const tempId = `temp-${Date.now()}-${Math.random()}`;
+    const currentReplyTo = replyTo;
     setNewMessage("");
     setShowEmoji(false);
     sendTyping(false);
@@ -369,36 +433,28 @@ export function useChatState() {
       media_url: mediaUrl,
       media_type: mediaType,
       status: "sending",
-      reply_to_id: replyTo?.id || null,
-      reply_to: replyTo,
+      reply_to_id: currentReplyTo?.id || null,
+      reply_to: currentReplyTo,
       profiles: null,
     };
     setSendingIds(prev => new Set(prev).add(tempId));
-    setMessages(prev => [...prev, optimisticMsg]);
+    setMessages(prev => mergeMessages(prev, [optimisticMsg]));
     setReplyTo(null);
 
-    try {
-      const insertData: any = {
-        sender_id: user.id,
-        conversation_id: activeConversationId,
-        content: content || "",
-        status: "sent",
-      };
-      if (mediaUrl) { insertData.media_url = mediaUrl; insertData.media_type = mediaType; }
-      if (replyTo) insertData.reply_to_id = replyTo.id;
-      const { data, error } = await supabase.from("messages").insert(insertData).select("id").single();
-      if (error) throw error;
-      tempToRealId.current.set(data.id, tempId);
-      setSendingIds(prev => { const s = new Set(prev); s.delete(tempId); return s; });
-      setConfirmedIds(prev => new Set(prev).add(tempId));
-      setMessages(prev => prev.map(m => (m.id === tempId ? { ...m, id: data.id, status: "sent" } : m)));
-      setConfirmedIds(prev => { const s = new Set(prev); s.delete(tempId); s.add(data.id); return s; });
-      fetchConversations();
-    } catch (err) {
-      setSendingIds(prev => { const s = new Set(prev); s.delete(tempId); return s; });
-      setMessages(prev => prev.filter(m => m.id !== tempId));
-      console.error("Xabar yuborishda xatolik:", err);
-    }
+    await persistMessage(tempId, {
+      content,
+      mediaUrl,
+      mediaType,
+      replyToId: currentReplyTo?.id || null,
+    }, activeConversationId);
+  };
+
+  const retryMessage = async (tempId: string) => {
+    const msg = messages.find(m => m.id === tempId);
+    if (!msg || !msg._retryPayload || !msg.conversation_id) return;
+    setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: "sending", failed: false } : m));
+    setSendingIds(prev => new Set(prev).add(tempId));
+    await persistMessage(tempId, msg._retryPayload, msg.conversation_id);
   };
 
   const deleteMessage = async (msgId: string) => {
@@ -450,7 +506,7 @@ export function useChatState() {
     setContextMenuMsgId, setContextMenuPos, setEditingMsgId, setEditContent, setReplyTo,
     // Actions
     openConversation, uploadMedia, sendMessage, deleteMessage, startEditing, saveEdit, cancelEdit,
-    togglePin, replyToMessage, loadMoreMessages, handleTyping, fetchConversations,
+    togglePin, replyToMessage, loadMoreMessages, handleTyping, fetchConversations, retryMessage,
     setSendingIds, setConfirmedIds, setMessages,
   };
 }
