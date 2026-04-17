@@ -37,6 +37,21 @@ export interface Message {
   edited_at?: string | null;
   profiles?: { username: string; avatar_url: string | null } | null;
   reply_to?: Message | null;
+  failed?: boolean;
+  _retryPayload?: { content: string; mediaUrl?: string | null; mediaType?: string | null; replyToId?: string | null };
+}
+
+// Sort & dedupe helper — guarantees correct order and no duplicates
+function mergeMessages(prev: Message[], incoming: Message[]): Message[] {
+  const map = new Map<string, Message>();
+  for (const m of prev) map.set(m.id, m);
+  for (const m of incoming) {
+    const existing = map.get(m.id);
+    map.set(m.id, existing ? { ...existing, ...m } : m);
+  }
+  return Array.from(map.values()).sort((a, b) =>
+    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
 }
 
 const PAGE_SIZE = 20;
