@@ -233,6 +233,7 @@ export default function ChatPage() {
                       onContextMenu={handleContextMenu}
                       onPointerDown={handlePointerDown}
                       onPointerUp={handlePointerUp}
+                      onRetry={state.retryMessage}
                     />
                   ))}
                 </AnimatePresence>
