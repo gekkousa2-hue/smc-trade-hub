@@ -266,23 +266,24 @@ export function useChatState() {
     return () => { supabase.removeChannel(channel); };
   }, [activeConversationId, user]);
 
-  /* ─── Real-time conversations + global new messages (sidebar refresh) ─── */
+  /* ─── Real-time conversations + global new messages (sidebar refresh, debounced) ─── */
+  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const debouncedFetchConversations = useCallback(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => fetchConversations(), 250);
+  }, [fetchConversations]);
+
   useEffect(() => {
     if (!user) return;
     const channel = supabase
       .channel(`global-${user.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "conversations" }, () => fetchConversations())
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversations" }, () => fetchConversations())
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
-        const msg = payload.new as any;
-        // If message belongs to another open conversation, append it (active channel handles current one)
-        if (msg.conversation_id !== activeConversationIdRef.current) {
-          fetchConversations();
-        }
-      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "conversations" }, () => debouncedFetchConversations())
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversations" }, () => debouncedFetchConversations())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => debouncedFetchConversations())
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, () => debouncedFetchConversations())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user, fetchConversations]);
+  }, [user, debouncedFetchConversations]);
 
   /* ─── Typing indicator ─── */
   useEffect(() => {
