@@ -174,7 +174,7 @@ export default function ChatPage() {
   const activeConversation = state.conversations.find(c => c.id === state.activeConversationId);
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] bg-background">
+    <div className="flex flex-col md:flex-row bg-background" style={{ height: "calc(100dvh - 4rem - env(safe-area-inset-bottom))" }}>
       {/* ─── Sidebar ─── */}
       <div className={`${state.showSidebar ? "flex" : "hidden md:flex"} w-full md:w-80 flex-col border-r border-border/30`}>
         <ChatSidebar

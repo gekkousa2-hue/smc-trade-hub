@@ -45,7 +45,7 @@ export default function MainLayout() {
   }, [activeTab, refreshUnread]);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen pb-[calc(4rem+env(safe-area-inset-bottom))]">
       <AnimatePresence mode="wait">
         <motion.div
           key={activeTab}

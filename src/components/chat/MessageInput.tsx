@@ -123,7 +123,7 @@ export const MessageInput = memo(function MessageInput({
       )}
 
       {/* Input Bar */}
-      <div className="glass border-t border-border/30 px-3 py-2.5 relative">
+      <div className="glass border-t border-border/30 px-3 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] relative">
         <input type="file" ref={fileInputRef} className="hidden" onChange={onFileSelect} accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" />
 
         {/* Attach Menu */}
