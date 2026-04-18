@@ -1,5 +1,6 @@
 import { CandlestickChart, MessageCircle, User, Bot } from "lucide-react";
 import { motion } from "framer-motion";
+import { useTranslation } from "react-i18next";
 
 interface BottomNavProps {
   activeTab: "chart" | "chat" | "ai" | "profile";
@@ -7,14 +8,14 @@ interface BottomNavProps {
   unreadCount?: number;
 }
 
-const tabs = [
-  { id: "chart" as const, label: "Grafik", icon: CandlestickChart },
-  { id: "ai" as const, label: "Trade-AI", icon: Bot },
-  { id: "chat" as const, label: "Chat", icon: MessageCircle },
-  { id: "profile" as const, label: "Profil", icon: User },
-];
-
 export default function BottomNav({ activeTab, onTabChange, unreadCount = 0 }: BottomNavProps) {
+  const { t } = useTranslation();
+  const tabs = [
+    { id: "chart" as const, label: t("nav.chart"), icon: CandlestickChart },
+    { id: "ai" as const, label: t("nav.ai"), icon: Bot },
+    { id: "chat" as const, label: t("nav.chat"), icon: MessageCircle },
+    { id: "profile" as const, label: t("nav.profile"), icon: User },
+  ];
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50">
       {/* Top fade gradient for depth */}
