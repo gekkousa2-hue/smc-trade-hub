@@ -119,34 +119,7 @@ export default function ProfilePage() {
           </div>
         </motion.div>
 
-        {/* Premium Balance Card */}
-        <motion.div variants={item} className="w-full premium-card rounded-3xl border-glow p-6 mt-2 relative overflow-hidden">
-          {/* Decorative gold gradient */}
-          <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
-          <div className="relative">
-            <div className="flex items-end justify-between">
-              <span className="text-4xl font-bold text-gradient-gold font-display tracking-tight">
-                ${mockBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-              </span>
-              <div className="flex items-center gap-1 rounded-lg bg-success/15 border border-success/30 px-2 py-1">
-                <TrendingUp className="h-3.5 w-3.5 text-success" />
-                <span className="text-xs font-bold text-success font-mono">+{mockChange}%</span>
-              </div>
-            </div>
-            {/* Mini animated bars */}
-            <div className="flex items-end gap-1 mt-5 h-10">
-              {[40, 55, 35, 70, 60, 80, 65, 90, 75, 95, 85, 100].map((h, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ height: 0 }}
-                  animate={{ height: `${h}%` }}
-                  transition={{ delay: 0.4 + i * 0.04, duration: 0.5, ease: "easeOut" }}
-                  className="flex-1 rounded-t-sm bg-gradient-to-t from-primary/30 to-primary/70"
-                />
-              ))}
-            </div>
-          </div>
-        </motion.div>
+
 
         {/* Info Row */}
         <motion.div variants={item} className="w-full grid grid-cols-2 gap-3">
