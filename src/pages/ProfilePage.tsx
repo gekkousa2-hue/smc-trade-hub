@@ -98,12 +98,18 @@ export default function ProfilePage() {
           if (p === "edit-profile") { setEditName(username); setSubPage("edit-profile"); }
           else if (p === "language") setSubPage("language");
           else if (p === "blocked") setSubPage("blocked");
+          else if (p === "theme") setSubPage("theme");
+          else if (p === "notifications") setSubPage("notifications");
+          else if (p === "privacy") setSubPage("privacy");
         }}
       />
     );
   }
   if (subPage === "language") return <LanguagePage onBack={() => setSubPage("settings")} />;
   if (subPage === "blocked") return <BlockedUsersPage onBack={() => setSubPage("settings")} />;
+  if (subPage === "theme") return <ThemePage onBack={() => setSubPage("settings")} />;
+  if (subPage === "notifications") return <NotificationsPage onBack={() => setSubPage("settings")} />;
+  if (subPage === "privacy") return <PrivacyPage onBack={() => setSubPage("settings")} />;
 
   return (
     <div className="flex flex-col items-center px-4 py-8 pb-28 min-h-full">
