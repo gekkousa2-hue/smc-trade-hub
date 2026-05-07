@@ -29,6 +29,12 @@ export function useUserSettings() {
   const [loading, setLoading] = useState(true);
   const { i18n } = useTranslation();
 
+  const applyTheme = (theme: string) => {
+    const root = document.documentElement;
+    if (theme === "light") root.classList.add("light");
+    else root.classList.remove("light");
+  };
+
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
@@ -52,6 +58,8 @@ export function useUserSettings() {
       if (s.language && s.language !== i18n.language) {
         i18n.changeLanguage(s.language);
       }
+      applyTheme(s.theme);
+      try { localStorage.setItem("app_theme", s.theme); } catch {}
     } else {
       // Create defaults if missing
       await supabase.from("user_settings").insert({ user_id: user.id });
@@ -66,6 +74,10 @@ export function useUserSettings() {
     if (!user) return;
     setSettings(prev => ({ ...prev, ...patch }));
     if (patch.language) i18n.changeLanguage(patch.language);
+    if (patch.theme) {
+      applyTheme(patch.theme);
+      try { localStorage.setItem("app_theme", patch.theme); } catch {}
+    }
     await supabase.from("user_settings").update(patch).eq("user_id", user.id);
   }, [i18n]);
 

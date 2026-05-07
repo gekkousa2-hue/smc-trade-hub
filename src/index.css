@@ -49,6 +49,40 @@
     --glow-success: 0 0 30px -10px hsl(142 60% 45% / 0.2);
     --glow-bear: 0 0 30px -10px hsl(0 72% 55% / 0.2);
   }
+
+  .light {
+    --background: 40 30% 97%;
+    --foreground: 220 25% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 12%;
+    --primary: 38 90% 48%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 220 25% 18%;
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 10% 40%;
+    --accent: 220 14% 90%;
+    --accent-foreground: 220 25% 12%;
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 14% 86%;
+    --input: 220 14% 86%;
+    --ring: 38 90% 48%;
+  }
+}
+
+.light body {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, hsl(45 93% 58% / 0.12), transparent 60%),
+    linear-gradient(180deg, hsl(40 30% 98%) 0%, hsl(40 25% 95%) 100%);
+}
+
+.light .premium-card {
+  background: linear-gradient(135deg, hsl(0 0% 100% / 0.9) 0%, hsl(40 30% 98% / 0.9) 100%);
+  border: 1px solid hsl(220 14% 88%);
+  box-shadow: 0 4px 20px -8px hsl(220 25% 12% / 0.08);
 }
 
 @layer base {
