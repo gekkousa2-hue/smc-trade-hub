@@ -48,10 +48,9 @@ export const MessageBubble = memo(function MessageBubble(
   const isFailed = !!msg.failed;
   return (
     <motion.div
-      layout
-      initial={{ opacity: 0, y: 6, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.12 }}
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.1, ease: "easeOut" }}
       className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
     >
       <div

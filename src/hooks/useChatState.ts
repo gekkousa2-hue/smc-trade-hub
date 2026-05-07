@@ -121,34 +121,63 @@ export function useChatState() {
     };
   }, [user]);
 
-  /* ─── Conversations ─── */
+  /* ─── Conversations (batched, no N+1) ─── */
   const fetchConversations = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
+    const { data: convs } = await supabase
       .from("conversations")
       .select("*")
       .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
       .order("updated_at", { ascending: false })
-      .limit(20);
-    if (!data) { setLoadingConversations(false); return; }
-    const enriched = await Promise.all(
-      data.map(async (conv) => {
-        const otherUserId = conv.user1_id === user.id ? conv.user2_id : conv.user1_id;
-        const { data: profile } = await supabase.from("profiles").select("user_id, username, avatar_url, is_online, last_seen").eq("user_id", otherUserId).single();
-        const { data: lastMsg } = await supabase.from("messages").select("content, created_at, media_type").eq("conversation_id", conv.id).order("created_at", { ascending: false }).limit(1).single();
-        // Unread count
-        const { count } = await supabase.from("messages").select("id", { count: "exact", head: true }).eq("conversation_id", conv.id).neq("sender_id", user.id).neq("status", "read" as any);
-        let lastMsgText = lastMsg?.content;
-        if (lastMsg) {
-          const mt = (lastMsg as any).media_type;
-          if (mt === "audio") lastMsgText = "🎤 Ovozli xabar";
-          else if (mt === "video") lastMsgText = "🎥 Video xabar";
-          else if (mt === "image") lastMsgText = "📷 Rasm";
-          else if (mt === "file") lastMsgText = "📎 Fayl";
-        }
-        return { ...conv, other_user: profile as any || undefined, last_message: lastMsgText, last_message_at: lastMsg?.created_at, unread_count: count || 0 } as Conversation;
-      })
-    );
+      .limit(50);
+    if (!convs || convs.length === 0) {
+      setConversations([]);
+      setLoadingConversations(false);
+      return;
+    }
+
+    const otherIds = Array.from(new Set(convs.map(c => (c.user1_id === user.id ? c.user2_id : c.user1_id))));
+    const convIds = convs.map(c => c.id);
+
+    // Batch profiles + recent messages in parallel
+    const [profilesRes, msgsRes, unreadRes] = await Promise.all([
+      supabase.from("profiles").select("user_id, username, avatar_url, is_online, last_seen").in("user_id", otherIds),
+      supabase.from("messages").select("conversation_id, content, media_type, created_at").in("conversation_id", convIds).order("created_at", { ascending: false }).limit(200),
+      supabase.from("messages").select("conversation_id, status, sender_id").in("conversation_id", convIds).neq("sender_id", user.id).neq("status", "read"),
+    ]);
+
+    const profileMap = new Map<string, any>();
+    (profilesRes.data || []).forEach(p => profileMap.set(p.user_id, p));
+
+    const lastMsgMap = new Map<string, any>();
+    (msgsRes.data || []).forEach((m: any) => {
+      if (!lastMsgMap.has(m.conversation_id)) lastMsgMap.set(m.conversation_id, m);
+    });
+
+    const unreadMap = new Map<string, number>();
+    (unreadRes.data || []).forEach((m: any) => {
+      unreadMap.set(m.conversation_id, (unreadMap.get(m.conversation_id) || 0) + 1);
+    });
+
+    const enriched: Conversation[] = convs.map(conv => {
+      const otherUserId = conv.user1_id === user.id ? conv.user2_id : conv.user1_id;
+      const lastMsg = lastMsgMap.get(conv.id);
+      let lastMsgText = lastMsg?.content;
+      if (lastMsg) {
+        const mt = lastMsg.media_type;
+        if (mt === "audio") lastMsgText = "🎤 Ovozli xabar";
+        else if (mt === "video") lastMsgText = "🎥 Video xabar";
+        else if (mt === "image") lastMsgText = "📷 Rasm";
+        else if (mt === "file") lastMsgText = "📎 Fayl";
+      }
+      return {
+        ...conv,
+        other_user: profileMap.get(otherUserId),
+        last_message: lastMsgText,
+        last_message_at: lastMsg?.created_at,
+        unread_count: unreadMap.get(conv.id) || 0,
+      } as Conversation;
+    });
     setConversations(enriched);
     setLoadingConversations(false);
   }, [user]);
@@ -199,10 +228,12 @@ export function useChatState() {
     fetchMessages(activeConversationId, messages[0].created_at);
   }, [activeConversationId, isLoadingMore, hasMore, messages, fetchMessages]);
 
-  /* ─── Mark messages as read ─── */
+  /* ─── Mark messages as read (only when opening / new arrives) ─── */
   useEffect(() => {
     if (!activeConversationId || !user) return;
+    let cancelled = false;
     const markRead = async () => {
+      if (cancelled) return;
       await supabase
         .from("messages")
         .update({ status: "read" } as any)
@@ -211,7 +242,8 @@ export function useChatState() {
         .neq("status", "read" as any);
     };
     markRead();
-  }, [activeConversationId, user, messages]);
+    return () => { cancelled = true; };
+  }, [activeConversationId, user]);
 
   /* ─── Real-time messages ─── */
   useEffect(() => {
@@ -266,11 +298,11 @@ export function useChatState() {
     return () => { supabase.removeChannel(channel); };
   }, [activeConversationId, user]);
 
-  /* ─── Real-time conversations + global new messages (sidebar refresh, debounced) ─── */
+  /* ─── Real-time sidebar refresh (debounced, INSERT-only to avoid loops) ─── */
   const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
   const debouncedFetchConversations = useCallback(() => {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    refreshTimerRef.current = setTimeout(() => fetchConversations(), 250);
+    refreshTimerRef.current = setTimeout(() => fetchConversations(), 600);
   }, [fetchConversations]);
 
   useEffect(() => {
@@ -278,9 +310,7 @@ export function useChatState() {
     const channel = supabase
       .channel(`global-${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "conversations" }, () => debouncedFetchConversations())
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversations" }, () => debouncedFetchConversations())
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => debouncedFetchConversations())
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, () => debouncedFetchConversations())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user, debouncedFetchConversations]);
