@@ -52,20 +52,22 @@ export default function ChatPage() {
   }, [state.messages, state.user, scrollToBottom]);
 
   /* ─── Infinite scroll ─── */
+  const isLoadingMoreRef = useRef(false);
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    // Update scroll-to-bottom button visibility
     const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 200;
     setShowScrollBtn(!nearBottom);
-    // Infinite scroll up
-    if (container.scrollTop < 80 && state.hasMore && !state.isLoadingMore) {
+    if (container.scrollTop < 80 && state.hasMore && !state.isLoadingMore && !isLoadingMoreRef.current) {
+      isLoadingMoreRef.current = true;
       const prevHeight = container.scrollHeight;
-      state.loadMoreMessages();
-      requestAnimationFrame(() => {
-        if (scrollContainerRef.current) {
-          scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight - prevHeight;
-        }
+      Promise.resolve(state.loadMoreMessages()).finally(() => {
+        requestAnimationFrame(() => {
+          if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight - prevHeight;
+          }
+          isLoadingMoreRef.current = false;
+        });
       });
     }
   }, [state.hasMore, state.isLoadingMore, state.loadMoreMessages]);
@@ -223,7 +225,7 @@ export default function ChatPage() {
                   </div>
                 </div>
               ) : (
-                <AnimatePresence initial={false}>
+                <>
                   {state.messages.map(msg => (
                     <MessageBubble
                       key={msg.id}
@@ -236,7 +238,7 @@ export default function ChatPage() {
                       onRetry={state.retryMessage}
                     />
                   ))}
-                </AnimatePresence>
+                </>
               )}
 
               {/* Typing indicator */}
