@@ -228,10 +228,12 @@ export function useChatState() {
     fetchMessages(activeConversationId, messages[0].created_at);
   }, [activeConversationId, isLoadingMore, hasMore, messages, fetchMessages]);
 
-  /* ─── Mark messages as read ─── */
+  /* ─── Mark messages as read (only when opening / new arrives) ─── */
   useEffect(() => {
     if (!activeConversationId || !user) return;
+    let cancelled = false;
     const markRead = async () => {
+      if (cancelled) return;
       await supabase
         .from("messages")
         .update({ status: "read" } as any)
@@ -240,7 +242,8 @@ export function useChatState() {
         .neq("status", "read" as any);
     };
     markRead();
-  }, [activeConversationId, user, messages]);
+    return () => { cancelled = true; };
+  }, [activeConversationId, user]);
 
   /* ─── Real-time messages ─── */
   useEffect(() => {
