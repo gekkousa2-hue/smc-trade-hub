@@ -13,8 +13,11 @@ import { useTranslation } from "react-i18next";
 import SettingsPage from "./SettingsPage";
 import LanguagePage from "./LanguagePage";
 import BlockedUsersPage from "./BlockedUsersPage";
+import ThemePage from "./ThemePage";
+import NotificationsPage from "./NotificationsPage";
+import PrivacyPage from "./PrivacyPage";
 
-type SubPage = null | "settings" | "language" | "blocked" | "edit-profile";
+type SubPage = null | "settings" | "language" | "blocked" | "edit-profile" | "theme" | "notifications" | "privacy";
 
 export default function ProfilePage() {
   const { t } = useTranslation();

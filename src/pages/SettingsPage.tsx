@@ -25,9 +25,9 @@ export default function SettingsPage({ onBack, onNavigate }: Props) {
       title: t("settings.preferences"),
       items: [
         { icon: Languages, label: t("settings.language"), key: "language" as const, color: "text-[hsl(210_80%_60%)]", value: langLabel[settings.language] },
-        { icon: Palette, label: t("settings.theme"), key: "theme" as const, color: "text-[hsl(280_70%_65%)]", value: settings.theme === "dark" ? "Dark" : "Light", soon: true },
-        { icon: Bell, label: t("settings.notifications"), key: "notifications" as const, color: "text-[hsl(45_93%_58%)]", soon: true },
-        { icon: Lock, label: t("settings.privacy"), key: "privacy" as const, color: "text-[hsl(160_70%_50%)]", soon: true },
+        { icon: Palette, label: t("settings.theme"), key: "theme" as const, color: "text-[hsl(280_70%_65%)]", value: settings.theme === "dark" ? "Dark" : "Light" },
+        { icon: Bell, label: t("settings.notifications"), key: "notifications" as const, color: "text-[hsl(45_93%_58%)]" },
+        { icon: Lock, label: t("settings.privacy"), key: "privacy" as const, color: "text-[hsl(160_70%_50%)]" },
         { icon: Ban, label: t("settings.blocked_users"), key: "blocked" as const, color: "text-[hsl(0_70%_60%)]" },
       ],
     },
