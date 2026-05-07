@@ -298,11 +298,11 @@ export function useChatState() {
     return () => { supabase.removeChannel(channel); };
   }, [activeConversationId, user]);
 
-  /* ─── Real-time conversations + global new messages (sidebar refresh, debounced) ─── */
+  /* ─── Real-time sidebar refresh (debounced, INSERT-only to avoid loops) ─── */
   const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
   const debouncedFetchConversations = useCallback(() => {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    refreshTimerRef.current = setTimeout(() => fetchConversations(), 250);
+    refreshTimerRef.current = setTimeout(() => fetchConversations(), 600);
   }, [fetchConversations]);
 
   useEffect(() => {
@@ -310,9 +310,7 @@ export function useChatState() {
     const channel = supabase
       .channel(`global-${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "conversations" }, () => debouncedFetchConversations())
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversations" }, () => debouncedFetchConversations())
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => debouncedFetchConversations())
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, () => debouncedFetchConversations())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user, debouncedFetchConversations]);
