@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
+import { chatCache } from "@/lib/chatCache";
 
 /* ─── Types ─── */
 export interface Profile {
@@ -92,8 +93,9 @@ export function useChatState() {
   /* ─── Auth ─── */
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
+      if (event === "SIGNED_OUT") chatCache.clearAll();
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -133,6 +135,7 @@ export function useChatState() {
     if (!convs || convs.length === 0) {
       setConversations([]);
       setLoadingConversations(false);
+      chatCache.setConversations(user.id, []);
       return;
     }
 
@@ -180,9 +183,19 @@ export function useChatState() {
     });
     setConversations(enriched);
     setLoadingConversations(false);
+    chatCache.setConversations(user.id, enriched);
   }, [user]);
 
-  useEffect(() => { fetchConversations(); }, [fetchConversations]);
+  /* ─── Hydrate conversations from cache instantly on user change ─── */
+  useEffect(() => {
+    if (!user) return;
+    const cached = chatCache.getConversations(user.id);
+    if (cached && cached.length > 0) {
+      setConversations(cached);
+      setLoadingConversations(false);
+    }
+    fetchConversations();
+  }, [user, fetchConversations]);
 
   /* ─── Messages fetch (paginated) ─── */
   const fetchMessages = useCallback(async (conversationId: string, before?: string) => {
@@ -205,10 +218,18 @@ export function useChatState() {
     if (data) {
       const reversed = [...data].reverse() as Message[];
       if (before) {
-        setMessages(prev => [...reversed, ...prev]);
+        setMessages(prev => {
+          const merged = mergeMessages(prev, reversed);
+          return merged;
+        });
         setHasMore(data.length === PAGE_SIZE);
       } else {
-        setMessages(reversed);
+        setMessages(prev => {
+          // Merge with any cached/optimistic messages already in state
+          const merged = mergeMessages(prev, reversed);
+          chatCache.setMessages(conversationId, merged);
+          return merged;
+        });
         setHasMore(data.length === PAGE_SIZE);
       }
     }
@@ -220,8 +241,23 @@ export function useChatState() {
     activeConversationIdRef.current = activeConversationId;
     if (!activeConversationId) { setMessages([]); return; }
     setHasMore(true);
+    // Instant hydrate from cache
+    const cached = chatCache.getMessages(activeConversationId);
+    if (cached && cached.length > 0) {
+      setMessages(cached);
+      setLoadingMessages(false);
+    } else {
+      setMessages([]);
+    }
+    // Fetch fresh in background
     fetchMessages(activeConversationId);
   }, [activeConversationId, fetchMessages]);
+
+  /* ─── Persist messages to cache whenever they change ─── */
+  useEffect(() => {
+    if (!activeConversationId || messages.length === 0) return;
+    chatCache.setMessages(activeConversationId, messages);
+  }, [activeConversationId, messages]);
 
   const loadMoreMessages = useCallback(() => {
     if (!activeConversationId || isLoadingMore || !hasMore || messages.length === 0) return;
