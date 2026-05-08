@@ -1,18 +1,17 @@
-import { useRef, useCallback, useEffect, useState } from "react";
+import { useRef, useCallback, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageSquare, ArrowDown, Loader2 } from "lucide-react";
+import { MessageSquare, ArrowDown } from "lucide-react";
 import { useChatState, type Message } from "@/hooks/useChatState";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { ChatHeader } from "@/components/chat/ChatHeader";
-import { MessageBubble } from "@/components/chat/MessageBubble";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { ContextMenu } from "@/components/chat/ContextMenu";
 import { MessageSkeleton } from "@/components/chat/SkeletonLoaders";
+import { VirtualMessageList, type VirtualMessageListHandle } from "@/components/chat/VirtualMessageList";
 
 export default function ChatPage() {
   const state = useChatState();
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const virtualListRef = useRef<VirtualMessageListHandle>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -21,63 +20,9 @@ export default function ChatPage() {
   const streamRef = useRef<MediaStream | null>(null);
 
   const [showScrollBtn, setShowScrollBtn] = useState(false);
-  const lastMessageCountRef = useRef(0);
 
   const scrollToBottom = useCallback((smooth = true) => {
-    bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
-  }, []);
-
-  /* ─── Auto-scroll on new messages if near bottom ─── */
-  useEffect(() => {
-    const c = scrollContainerRef.current;
-    if (!c) return;
-    const prevCount = lastMessageCountRef.current;
-    const currCount = state.messages.length;
-    lastMessageCountRef.current = currCount;
-    if (currCount === 0) return;
-    // First load — jump to bottom
-    if (prevCount === 0) {
-      requestAnimationFrame(() => scrollToBottom(false));
-      return;
-    }
-    // New message arrived
-    if (currCount > prevCount) {
-      const nearBottom = c.scrollHeight - c.scrollTop - c.clientHeight < 200;
-      const lastMsg = state.messages[currCount - 1];
-      const isOwnMsg = lastMsg.sender_id === state.user?.id;
-      if (nearBottom || isOwnMsg) {
-        requestAnimationFrame(() => scrollToBottom(true));
-      }
-    }
-  }, [state.messages, state.user, scrollToBottom]);
-
-  /* ─── Infinite scroll ─── */
-  const isLoadingMoreRef = useRef(false);
-  const handleScroll = useCallback(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 200;
-    setShowScrollBtn(!nearBottom);
-    if (container.scrollTop < 80 && state.hasMore && !state.isLoadingMore && !isLoadingMoreRef.current) {
-      isLoadingMoreRef.current = true;
-      const prevHeight = container.scrollHeight;
-      Promise.resolve(state.loadMoreMessages()).finally(() => {
-        requestAnimationFrame(() => {
-          if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight - prevHeight;
-          }
-          isLoadingMoreRef.current = false;
-        });
-      });
-    }
-  }, [state.hasMore, state.isLoadingMore, state.loadMoreMessages]);
-
-  /* ─── Track scroll position for scroll-to-bottom button ─── */
-  const updateScrollBtn = useCallback(() => {
-    const c = scrollContainerRef.current;
-    if (!c) return;
-    const nearBottom = c.scrollHeight - c.scrollTop - c.clientHeight < 200;
-    setShowScrollBtn(!nearBottom);
+    virtualListRef.current?.scrollToBottom(smooth);
   }, []);
 
   /* ─── Long press handler (for ALL messages) ─── */
@@ -202,47 +147,38 @@ export default function ChatPage() {
               onBack={() => state.setShowSidebar(true)}
             />
 
-            {/* Messages */}
-            <div
-              ref={scrollContainerRef}
-              onScroll={handleScroll}
-              className="flex-1 overflow-y-auto px-4 py-4 space-y-2.5 relative scroll-smooth"
-            >
-              {/* Loading more indicator */}
-              {state.isLoadingMore && (
-                <div className="flex justify-center py-2">
-                  <Loader2 className="h-5 w-5 animate-spin text-primary/60" />
-                </div>
-              )}
-
-              {state.loadingMessages ? (
+            {/* Messages — virtualized */}
+            {state.loadingMessages ? (
+              <div className="flex-1 overflow-hidden px-4 py-4">
                 <MessageSkeleton />
-              ) : state.messages.length === 0 ? (
-                <div className="flex h-full items-center justify-center">
-                  <div className="text-center">
-                    <p className="text-2xl mb-2">👋</p>
-                    <p className="text-sm text-muted-foreground">Salomlashing va suhbatni boshlang!</p>
-                  </div>
+              </div>
+            ) : state.messages.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <p className="text-2xl mb-2">👋</p>
+                  <p className="text-sm text-muted-foreground">Salomlashing va suhbatni boshlang!</p>
                 </div>
-              ) : (
-                <>
-                  {state.messages.map(msg => (
-                    <MessageBubble
-                      key={msg.id}
-                      msg={msg}
-                      isOwn={msg.sender_id === state.user?.id}
-                      isSending={state.sendingIds.has(msg.id)}
-                      onContextMenu={handleContextMenu}
-                      onPointerDown={handlePointerDown}
-                      onPointerUp={handlePointerUp}
-                      onRetry={state.retryMessage}
-                    />
-                  ))}
-                </>
-              )}
+              </div>
+            ) : (
+              <VirtualMessageList
+                ref={virtualListRef}
+                messages={state.messages}
+                currentUserId={state.user?.id}
+                sendingIds={state.sendingIds}
+                isLoadingMore={state.isLoadingMore}
+                hasMore={state.hasMore}
+                onLoadMore={state.loadMoreMessages}
+                onContextMenu={handleContextMenu}
+                onPointerDown={handlePointerDown}
+                onPointerUp={handlePointerUp}
+                onRetry={state.retryMessage}
+                onScrollChange={(near) => setShowScrollBtn(!near)}
+              />
+            )}
 
-              {/* Typing indicator */}
-              {state.otherTyping && (
+            {/* Typing indicator */}
+            {state.otherTyping && (
+              <div className="px-4 pb-1">
                 <motion.div
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -256,22 +192,20 @@ export default function ChatPage() {
                     </div>
                   </div>
                 </motion.div>
-              )}
+              </div>
+            )}
 
-              <div ref={bottomRef} />
-
-              {/* Context Menu */}
-              <ContextMenu
-                contextMenuMsgId={state.contextMenuMsgId}
-                contextMenuPos={state.contextMenuPos}
-                messages={state.messages}
-                currentUserId={state.user?.id}
-                onStartEditing={state.startEditing}
-                onDelete={state.deleteMessage}
-                onTogglePin={state.togglePin}
-                onReply={state.replyToMessage}
-              />
-            </div>
+            {/* Context Menu */}
+            <ContextMenu
+              contextMenuMsgId={state.contextMenuMsgId}
+              contextMenuPos={state.contextMenuPos}
+              messages={state.messages}
+              currentUserId={state.user?.id}
+              onStartEditing={state.startEditing}
+              onDelete={state.deleteMessage}
+              onTogglePin={state.togglePin}
+              onReply={state.replyToMessage}
+            />
 
             {/* Scroll to bottom button */}
             <AnimatePresence>
