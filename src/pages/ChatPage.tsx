@@ -1,18 +1,17 @@
-import { useRef, useCallback, useEffect, useState } from "react";
+import { useRef, useCallback, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageSquare, ArrowDown, Loader2 } from "lucide-react";
+import { MessageSquare, ArrowDown } from "lucide-react";
 import { useChatState, type Message } from "@/hooks/useChatState";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { ChatHeader } from "@/components/chat/ChatHeader";
-import { MessageBubble } from "@/components/chat/MessageBubble";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { ContextMenu } from "@/components/chat/ContextMenu";
 import { MessageSkeleton } from "@/components/chat/SkeletonLoaders";
+import { VirtualMessageList, type VirtualMessageListHandle } from "@/components/chat/VirtualMessageList";
 
 export default function ChatPage() {
   const state = useChatState();
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const virtualListRef = useRef<VirtualMessageListHandle>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -21,63 +20,9 @@ export default function ChatPage() {
   const streamRef = useRef<MediaStream | null>(null);
 
   const [showScrollBtn, setShowScrollBtn] = useState(false);
-  const lastMessageCountRef = useRef(0);
 
   const scrollToBottom = useCallback((smooth = true) => {
-    bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
-  }, []);
-
-  /* ─── Auto-scroll on new messages if near bottom ─── */
-  useEffect(() => {
-    const c = scrollContainerRef.current;
-    if (!c) return;
-    const prevCount = lastMessageCountRef.current;
-    const currCount = state.messages.length;
-    lastMessageCountRef.current = currCount;
-    if (currCount === 0) return;
-    // First load — jump to bottom
-    if (prevCount === 0) {
-      requestAnimationFrame(() => scrollToBottom(false));
-      return;
-    }
-    // New message arrived
-    if (currCount > prevCount) {
-      const nearBottom = c.scrollHeight - c.scrollTop - c.clientHeight < 200;
-      const lastMsg = state.messages[currCount - 1];
-      const isOwnMsg = lastMsg.sender_id === state.user?.id;
-      if (nearBottom || isOwnMsg) {
-        requestAnimationFrame(() => scrollToBottom(true));
-      }
-    }
-  }, [state.messages, state.user, scrollToBottom]);
-
-  /* ─── Infinite scroll ─── */
-  const isLoadingMoreRef = useRef(false);
-  const handleScroll = useCallback(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 200;
-    setShowScrollBtn(!nearBottom);
-    if (container.scrollTop < 80 && state.hasMore && !state.isLoadingMore && !isLoadingMoreRef.current) {
-      isLoadingMoreRef.current = true;
-      const prevHeight = container.scrollHeight;
-      Promise.resolve(state.loadMoreMessages()).finally(() => {
-        requestAnimationFrame(() => {
-          if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight - prevHeight;
-          }
-          isLoadingMoreRef.current = false;
-        });
-      });
-    }
-  }, [state.hasMore, state.isLoadingMore, state.loadMoreMessages]);
-
-  /* ─── Track scroll position for scroll-to-bottom button ─── */
-  const updateScrollBtn = useCallback(() => {
-    const c = scrollContainerRef.current;
-    if (!c) return;
-    const nearBottom = c.scrollHeight - c.scrollTop - c.clientHeight < 200;
-    setShowScrollBtn(!nearBottom);
+    virtualListRef.current?.scrollToBottom(smooth);
   }, []);
 
   /* ─── Long press handler (for ALL messages) ─── */
