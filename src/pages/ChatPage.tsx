@@ -147,47 +147,38 @@ export default function ChatPage() {
               onBack={() => state.setShowSidebar(true)}
             />
 
-            {/* Messages */}
-            <div
-              ref={scrollContainerRef}
-              onScroll={handleScroll}
-              className="flex-1 overflow-y-auto px-4 py-4 space-y-2.5 relative scroll-smooth"
-            >
-              {/* Loading more indicator */}
-              {state.isLoadingMore && (
-                <div className="flex justify-center py-2">
-                  <Loader2 className="h-5 w-5 animate-spin text-primary/60" />
-                </div>
-              )}
-
-              {state.loadingMessages ? (
+            {/* Messages — virtualized */}
+            {state.loadingMessages ? (
+              <div className="flex-1 overflow-hidden px-4 py-4">
                 <MessageSkeleton />
-              ) : state.messages.length === 0 ? (
-                <div className="flex h-full items-center justify-center">
-                  <div className="text-center">
-                    <p className="text-2xl mb-2">👋</p>
-                    <p className="text-sm text-muted-foreground">Salomlashing va suhbatni boshlang!</p>
-                  </div>
+              </div>
+            ) : state.messages.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <p className="text-2xl mb-2">👋</p>
+                  <p className="text-sm text-muted-foreground">Salomlashing va suhbatni boshlang!</p>
                 </div>
-              ) : (
-                <>
-                  {state.messages.map(msg => (
-                    <MessageBubble
-                      key={msg.id}
-                      msg={msg}
-                      isOwn={msg.sender_id === state.user?.id}
-                      isSending={state.sendingIds.has(msg.id)}
-                      onContextMenu={handleContextMenu}
-                      onPointerDown={handlePointerDown}
-                      onPointerUp={handlePointerUp}
-                      onRetry={state.retryMessage}
-                    />
-                  ))}
-                </>
-              )}
+              </div>
+            ) : (
+              <VirtualMessageList
+                ref={virtualListRef}
+                messages={state.messages}
+                currentUserId={state.user?.id}
+                sendingIds={state.sendingIds}
+                isLoadingMore={state.isLoadingMore}
+                hasMore={state.hasMore}
+                onLoadMore={state.loadMoreMessages}
+                onContextMenu={handleContextMenu}
+                onPointerDown={handlePointerDown}
+                onPointerUp={handlePointerUp}
+                onRetry={state.retryMessage}
+                onScrollChange={(near) => setShowScrollBtn(!near)}
+              />
+            )}
 
-              {/* Typing indicator */}
-              {state.otherTyping && (
+            {/* Typing indicator */}
+            {state.otherTyping && (
+              <div className="px-4 pb-1">
                 <motion.div
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -201,22 +192,20 @@ export default function ChatPage() {
                     </div>
                   </div>
                 </motion.div>
-              )}
+              </div>
+            )}
 
-              <div ref={bottomRef} />
-
-              {/* Context Menu */}
-              <ContextMenu
-                contextMenuMsgId={state.contextMenuMsgId}
-                contextMenuPos={state.contextMenuPos}
-                messages={state.messages}
-                currentUserId={state.user?.id}
-                onStartEditing={state.startEditing}
-                onDelete={state.deleteMessage}
-                onTogglePin={state.togglePin}
-                onReply={state.replyToMessage}
-              />
-            </div>
+            {/* Context Menu */}
+            <ContextMenu
+              contextMenuMsgId={state.contextMenuMsgId}
+              contextMenuPos={state.contextMenuPos}
+              messages={state.messages}
+              currentUserId={state.user?.id}
+              onStartEditing={state.startEditing}
+              onDelete={state.deleteMessage}
+              onTogglePin={state.togglePin}
+              onReply={state.replyToMessage}
+            />
 
             {/* Scroll to bottom button */}
             <AnimatePresence>
