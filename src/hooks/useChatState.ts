@@ -134,6 +134,7 @@ export function useChatState() {
     if (!convs || convs.length === 0) {
       setConversations([]);
       setLoadingConversations(false);
+      chatCache.setConversations(user.id, []);
       return;
     }
 
@@ -181,9 +182,19 @@ export function useChatState() {
     });
     setConversations(enriched);
     setLoadingConversations(false);
+    chatCache.setConversations(user.id, enriched);
   }, [user]);
 
-  useEffect(() => { fetchConversations(); }, [fetchConversations]);
+  /* ─── Hydrate conversations from cache instantly on user change ─── */
+  useEffect(() => {
+    if (!user) return;
+    const cached = chatCache.getConversations(user.id);
+    if (cached && cached.length > 0) {
+      setConversations(cached);
+      setLoadingConversations(false);
+    }
+    fetchConversations();
+  }, [user, fetchConversations]);
 
   /* ─── Messages fetch (paginated) ─── */
   const fetchMessages = useCallback(async (conversationId: string, before?: string) => {
