@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
+import { chatCache } from "@/lib/chatCache";
 
 /* ─── Types ─── */
 export interface Profile {
