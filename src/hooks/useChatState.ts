@@ -217,10 +217,18 @@ export function useChatState() {
     if (data) {
       const reversed = [...data].reverse() as Message[];
       if (before) {
-        setMessages(prev => [...reversed, ...prev]);
+        setMessages(prev => {
+          const merged = mergeMessages(prev, reversed);
+          return merged;
+        });
         setHasMore(data.length === PAGE_SIZE);
       } else {
-        setMessages(reversed);
+        setMessages(prev => {
+          // Merge with any cached/optimistic messages already in state
+          const merged = mergeMessages(prev, reversed);
+          chatCache.setMessages(conversationId, merged);
+          return merged;
+        });
         setHasMore(data.length === PAGE_SIZE);
       }
     }
@@ -232,8 +240,23 @@ export function useChatState() {
     activeConversationIdRef.current = activeConversationId;
     if (!activeConversationId) { setMessages([]); return; }
     setHasMore(true);
+    // Instant hydrate from cache
+    const cached = chatCache.getMessages(activeConversationId);
+    if (cached && cached.length > 0) {
+      setMessages(cached);
+      setLoadingMessages(false);
+    } else {
+      setMessages([]);
+    }
+    // Fetch fresh in background
     fetchMessages(activeConversationId);
   }, [activeConversationId, fetchMessages]);
+
+  /* ─── Persist messages to cache whenever they change ─── */
+  useEffect(() => {
+    if (!activeConversationId || messages.length === 0) return;
+    chatCache.setMessages(activeConversationId, messages);
+  }, [activeConversationId, messages]);
 
   const loadMoreMessages = useCallback(() => {
     if (!activeConversationId || isLoadingMore || !hasMore || messages.length === 0) return;
