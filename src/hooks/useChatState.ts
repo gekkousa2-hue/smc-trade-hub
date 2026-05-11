@@ -479,7 +479,7 @@ export function useChatState() {
 
   const sendMessage = async (e?: React.FormEvent, mediaUrl?: string, mediaType?: string) => {
     if (e) e.preventDefault();
-    const content = newMessage.trim();
+    const content = newMessage.trim().slice(0, 4000);
     if (!content && !mediaUrl) return;
     if (!user || !activeConversationId) return;
 
