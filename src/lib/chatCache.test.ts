@@ -160,33 +160,32 @@ describe("chatCache — quota exceeded", () => {
   });
 
   it("evicts oldest conversation caches when message eviction is not enough", async () => {
-    installFakeStorage({ quotaBytes: 800 });
+    installFakeStorage({ quotaBytes: 600 });
     const cache = await freshCache();
 
-    // Pre-fill: a couple of msg caches (evicted first) and several conv caches.
     const seed = (key: string, value: string) => {
       try { localStorage.setItem(key, value); } catch { /* full */ }
     };
-    seed("chat:msgs:legacy-1", "m".repeat(40));
-    seed("chat:msgs:legacy-2", "m".repeat(40));
-    for (let i = 0; i < 6; i++) seed(`chat:convs:old-user-${i}`, "z".repeat(60));
+    // Small msg caches (evicted first, but won't free much).
+    seed("chat:msgs:legacy-1", "m".repeat(20));
+    seed("chat:msgs:legacy-2", "m".repeat(20));
+    // Larger conv caches that will need to be pruned.
+    for (let i = 0; i < 5; i++) seed(`chat:convs:old-user-${i}`, "z".repeat(60));
 
-    const payload = Array.from({ length: 4 }, (_, i) => ({ id: `c${i}` })) as any[];
+    // Big new payload that won't fit without conv-cache eviction.
+    const payload = Array.from({ length: 8 }, (_, i) => ({
+      id: `c${i}`,
+      label: "x".repeat(15),
+    })) as any[];
     cache.setConversations("u-new", payload);
 
-    // Read still works (regardless of which tier accepted the write).
     expect(cache.getConversations("u-new")).toEqual(payload);
 
-    const remainingMsgs = Object.keys(localStorage).filter((k) =>
-      k.startsWith("chat:msgs:legacy-"),
-    );
     const remainingConvs = Object.keys(localStorage).filter((k) =>
       k.startsWith("chat:convs:old-user-"),
     );
-    // Message caches go first.
-    expect(remainingMsgs.length).toBeLessThanOrEqual(2);
-    // Conversation caches were also pruned to make room.
-    expect(remainingConvs.length).toBeLessThan(6);
+    // Conversation caches were pruned to make room.
+    expect(remainingConvs.length).toBeLessThan(5);
   });
 
   it("keeps reads working for the new write after eviction", async () => {
