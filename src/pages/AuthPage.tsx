@@ -34,7 +34,12 @@ export default function AuthPage() {
         }
       }
     } catch (err: any) {
-      setError(err.message);
+      console.error("Auth error:", err);
+      setError(
+        isLogin
+          ? "Email yoki parol noto'g'ri."
+          : "Ro'yxatdan o'tishda xatolik. Qayta urinib ko'ring."
+      );
     } finally {
       setLoading(false);
     }
