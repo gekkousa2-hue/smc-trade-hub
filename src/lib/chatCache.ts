@@ -126,11 +126,10 @@ function listKeys(prefix: string): string[] {
   }
 }
 
-/** Drop the N oldest message-cache entries to free quota. */
-function evictOldestMessageCaches(count: number) {
+/** Drop the N oldest cache entries with the given prefix to free quota. */
+function evictOldestByPrefix(prefix: string, count: number) {
   try {
-    const keys = listKeys("chat:msgs:");
-    // No timestamp metadata — drop arbitrary first N. Good enough for emergency relief.
+    const keys = listKeys(prefix);
     keys.slice(0, count).forEach(rawRemove);
   } catch {
     /* noop */
