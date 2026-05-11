@@ -53,12 +53,17 @@ export default function ProfilePage() {
   const handleLogout = async () => { await supabase.auth.signOut(); };
 
   const handleSaveName = async () => {
-    if (!user || !editName.trim()) return;
+    if (!user) return;
+    const trimmed = editName.trim();
+    if (trimmed.length < 2 || trimmed.length > 50) {
+      toast.error("Ism 2 dan 50 belgigacha bo'lishi kerak");
+      return;
+    }
     setSaving(true);
-    const { error } = await supabase.from("profiles").update({ username: editName.trim() }).eq("user_id", user.id);
+    const { error } = await supabase.from("profiles").update({ username: trimmed }).eq("user_id", user.id);
     setSaving(false);
     if (error) { toast.error(t("profile.error")); }
-    else { setUsername(editName.trim()); setSubPage(null); toast.success(t("profile.name_updated")); }
+    else { setUsername(trimmed); setSubPage(null); toast.success(t("profile.name_updated")); }
   };
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
