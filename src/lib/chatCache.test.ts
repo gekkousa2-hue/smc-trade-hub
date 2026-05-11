@@ -159,15 +159,57 @@ describe("chatCache — quota exceeded", () => {
     // both are acceptable; what matters is the data round-trips.
   });
 
-  it("falls back to in-memory cache when quota is unrecoverable", async () => {
-    installFakeStorage({ quotaBytes: 5 }); // basically nothing fits
+  it("evicts oldest conversation caches when message eviction is not enough", async () => {
+    installFakeStorage({ quotaBytes: 600 });
     const cache = await freshCache();
 
-    cache.setConversations("u1", [{ id: "c1", content: "z".repeat(50) } as any]);
-    expect(cache.isUsingMemoryFallback()).toBe(true);
-    expect(cache.getConversations("u1")).toEqual([
-      { id: "c1", content: "z".repeat(50) },
-    ]);
+    const seed = (key: string, value: string) => {
+      try { localStorage.setItem(key, value); } catch { /* full */ }
+    };
+    // Small msg caches (evicted first, but won't free much).
+    seed("chat:msgs:legacy-1", "m".repeat(20));
+    seed("chat:msgs:legacy-2", "m".repeat(20));
+    // Larger conv caches that will need to be pruned.
+    for (let i = 0; i < 5; i++) seed(`chat:convs:old-user-${i}`, "z".repeat(60));
+
+    // Big new payload that won't fit without conv-cache eviction.
+    const payload = Array.from({ length: 8 }, (_, i) => ({
+      id: `c${i}`,
+      label: "x".repeat(15),
+    })) as any[];
+    cache.setConversations("u-new", payload);
+
+    expect(cache.getConversations("u-new")).toEqual(payload);
+
+    const remainingConvs = Object.keys(localStorage).filter((k) =>
+      k.startsWith("chat:convs:old-user-"),
+    );
+    // Conversation caches were pruned to make room.
+    expect(remainingConvs.length).toBeLessThan(5);
+  });
+
+  it("keeps reads working for the new write after eviction", async () => {
+    installFakeStorage({ quotaBytes: 700 });
+    const cache = await freshCache();
+
+    const seed = (key: string, value: string) => {
+      try { localStorage.setItem(key, value); } catch { /* full */ }
+    };
+    for (let i = 0; i < 10; i++) seed(`chat:msgs:filler-${i}`, "f".repeat(30));
+
+    const msgs = Array.from({ length: 15 }, (_, i) => ({
+      id: `m${i}`,
+      content: "n".repeat(8),
+    })) as any[];
+    cache.setMessages("active", msgs);
+
+    expect(cache.getMessages("active")?.length).toBe(15);
+
+    // Some fillers should have been evicted to make room.
+    const remainingFillers = Object.keys(localStorage).filter((k) =>
+      k.startsWith("chat:msgs:filler-"),
+    );
+    expect(remainingFillers.length).toBeLessThan(10);
   });
 });
 

@@ -67,19 +67,30 @@ function rawSet(key: string, value: string): boolean {
     return true;
   } catch (e) {
     if (isQuotaError(e)) {
-      // Free space by dropping oldest message caches, then retry once.
-      evictOldestMessageCaches(10);
-      try {
-        localStorage.setItem(key, value);
-        return true;
-      } catch (e2) {
-        if (isQuotaError(e2)) {
-          warnOnce("localStorage quota exceeded after eviction — using memory cache.", e2);
-          useMemoryFallback = true;
-          memoryStore.set(key, value);
+      // Tiered eviction: drop oldest message caches first, then conversation caches.
+      for (const prefix of ["chat:msgs:", "chat:convs:"] as const) {
+        evictOldestByPrefix(prefix, 10);
+        try {
+          localStorage.setItem(key, value);
           return true;
+        } catch (e2) {
+          if (!isQuotaError(e2)) {
+            if (isStorageBlocked(e2)) {
+              useMemoryFallback = true;
+              warnOnce("localStorage blocked mid-write — switching to in-memory cache.", e2);
+              memoryStore.set(key, value);
+              return true;
+            }
+            warnOnce("localStorage write failed — caching skipped.", e2);
+            return false;
+          }
+          // still quota — try next prefix
         }
       }
+      warnOnce("localStorage quota exceeded after eviction — using memory cache.", e);
+      useMemoryFallback = true;
+      memoryStore.set(key, value);
+      return true;
     }
     if (isStorageBlocked(e)) {
       useMemoryFallback = true;
@@ -115,11 +126,10 @@ function listKeys(prefix: string): string[] {
   }
 }
 
-/** Drop the N oldest message-cache entries to free quota. */
-function evictOldestMessageCaches(count: number) {
+/** Drop the N oldest cache entries with the given prefix to free quota. */
+function evictOldestByPrefix(prefix: string, count: number) {
   try {
-    const keys = listKeys("chat:msgs:");
-    // No timestamp metadata — drop arbitrary first N. Good enough for emergency relief.
+    const keys = listKeys(prefix);
     keys.slice(0, count).forEach(rawRemove);
   } catch {
     /* noop */
