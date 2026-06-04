@@ -15,7 +15,7 @@ interface Props {
   onViewProfile?: (userId: string) => void;
 }
 
-export const ChatHeader = memo(function ChatHeader({ conversation, otherTyping, onBack }: Props) {
+export const ChatHeader = memo(function ChatHeader({ conversation, otherTyping, onBack, onViewProfile }: Props) {
   const { t } = useTranslation();
   const other = conversation.other_user;
   const isOnline = other?.is_online;
@@ -36,6 +36,10 @@ export const ChatHeader = memo(function ChatHeader({ conversation, otherTyping, 
     }
   };
 
+  const handleViewProfile = () => {
+    if (other?.user_id) onViewProfile?.(other.user_id);
+  };
+
   return (
     <header className="sticky top-0 z-40 flex items-center gap-3 px-4 py-3 border-b border-border/30 bg-[hsl(220_22%_6%/0.85)] backdrop-blur-2xl">
       <button
@@ -44,14 +48,16 @@ export const ChatHeader = memo(function ChatHeader({ conversation, otherTyping, 
       >
         <ArrowLeft className="h-4 w-4" />
       </button>
-      <UserAvatar
-        userId={other?.user_id || ""}
-        username={other?.username || "?"}
-        avatarUrl={other?.avatar_url}
-        size="sm"
-        online={isOnline}
-      />
-      <div className="min-w-0 flex-1">
+      <button onClick={handleViewProfile} className="shrink-0">
+        <UserAvatar
+          userId={other?.user_id || ""}
+          username={other?.username || "?"}
+          avatarUrl={other?.avatar_url}
+          size="sm"
+          online={isOnline}
+        />
+      </button>
+      <button onClick={handleViewProfile} className="min-w-0 flex-1 text-left">
         <h2 className="font-display text-sm font-bold text-foreground truncate">{other?.username || "—"}</h2>
         <p className="font-mono text-[10px]">
           {otherTyping ? (
@@ -62,7 +68,7 @@ export const ChatHeader = memo(function ChatHeader({ conversation, otherTyping, 
             <span className="text-muted-foreground/70">{formatLastSeen(other?.last_seen)}</span>
           )}
         </p>
-      </div>
+      </button>
 
       {/* Menu */}
       <div className="relative">
