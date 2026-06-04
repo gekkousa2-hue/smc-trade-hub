@@ -22,6 +22,7 @@ interface Props {
 export const ChatSidebar = memo(function ChatSidebar({
   conversations, activeConversationId, searchQuery, searchResults, isSearching,
   loadingConversations, onSearchChange, onOpenConversation, onSelectConversation,
+  onViewProfile,
 }: Props) {
   return (
     <>
