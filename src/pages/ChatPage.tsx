@@ -138,6 +138,7 @@ export default function ChatPage({ onViewProfile }: ChatPageProps) {
           onSearchChange={(q) => { state.setSearchQuery(q); state.setIsSearching(!!q); }}
           onOpenConversation={state.openConversation}
           onSelectConversation={(id) => { state.setActiveConversationId(id); state.setShowSidebar(false); }}
+          onViewProfile={onViewProfile}
         />
       </div>
 
