@@ -150,6 +150,7 @@ export default function ChatPage({ onViewProfile }: ChatPageProps) {
               conversation={activeConversation}
               otherTyping={state.otherTyping}
               onBack={() => state.setShowSidebar(true)}
+              onViewProfile={onViewProfile}
             />
 
             {/* Messages — virtualized */}
