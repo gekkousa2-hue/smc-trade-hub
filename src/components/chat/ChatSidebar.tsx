@@ -67,7 +67,9 @@ export const ChatSidebar = memo(function ChatSidebar({
                 onClick={() => onOpenConversation(profile.user_id)}
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition-all hover:bg-secondary/80 active:scale-[0.98]"
               >
-                <UserAvatar userId={profile.user_id} username={profile.username} avatarUrl={profile.avatar_url} size="md" online={profile.is_online} />
+                <div onClick={(e) => { e.stopPropagation(); onViewProfile?.(profile.user_id); }} className="shrink-0">
+                  <UserAvatar userId={profile.user_id} username={profile.username} avatarUrl={profile.avatar_url} size="md" online={profile.is_online} />
+                </div>
                 <div className="text-left">
                   <p className="text-sm font-medium text-foreground">{profile.username}</p>
                   <p className="text-xs text-primary/70 font-mono">Xabar yozish →</p>
