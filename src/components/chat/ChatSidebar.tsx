@@ -98,7 +98,9 @@ export const ChatSidebar = memo(function ChatSidebar({
                       : "hover:bg-secondary/50"
                   }`}
                 >
-                  <UserAvatar userId={conv.other_user?.user_id || ""} username={conv.other_user?.username || "?"} avatarUrl={conv.other_user?.avatar_url} size="md" online={conv.other_user?.is_online} />
+                  <div onClick={(e) => { e.stopPropagation(); onViewProfile?.(conv.other_user?.user_id || ""); }} className="shrink-0">
+                    <UserAvatar userId={conv.other_user?.user_id || ""} username={conv.other_user?.username || "?"} avatarUrl={conv.other_user?.avatar_url} size="md" online={conv.other_user?.is_online} />
+                  </div>
                   <div className="flex-1 min-w-0 text-left">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold text-foreground truncate">{conv.other_user?.username || "Noma'lum"}</p>
