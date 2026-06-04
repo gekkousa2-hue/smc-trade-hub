@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export default function MainLayout() {
   const [activeTab, setActiveTab] = useState<"chart" | "chat" | "ai" | "profile">("chart");
+  const [profileViewUserId, setProfileViewUserId] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
 
   const refreshUnread = useCallback(async () => {
@@ -44,11 +45,21 @@ export default function MainLayout() {
     }
   }, [activeTab, refreshUnread]);
 
+  const handleViewProfile = useCallback((userId: string) => {
+    setProfileViewUserId(userId);
+    setActiveTab("profile");
+  }, []);
+
+  const handleBackFromProfile = useCallback(() => {
+    setProfileViewUserId(null);
+    setActiveTab("chat");
+  }, []);
+
   return (
     <div className="min-h-screen pb-[calc(4rem+env(safe-area-inset-bottom))]">
       <AnimatePresence mode="wait">
         <motion.div
-          key={activeTab}
+          key={activeTab + (profileViewUserId || "")}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
@@ -56,11 +67,11 @@ export default function MainLayout() {
         >
           {activeTab === "chart" && <Index />}
           {activeTab === "ai" && <AIPage />}
-          {activeTab === "chat" && <ChatPage />}
-          {activeTab === "profile" && <ProfilePage />}
+          {activeTab === "chat" && <ChatPage onViewProfile={handleViewProfile} />}
+          {activeTab === "profile" && <ProfilePage viewUserId={profileViewUserId} onBack={profileViewUserId ? handleBackFromProfile : undefined} />}
         </motion.div>
       </AnimatePresence>
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} unreadCount={activeTab === "chat" ? 0 : unreadCount} />
+      <BottomNav activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (tab !== "profile") setProfileViewUserId(null); }} unreadCount={activeTab === "chat" ? 0 : unreadCount} />
     </div>
   );
 }
