@@ -12,6 +12,7 @@ interface Props {
   conversation: Conversation;
   otherTyping: boolean;
   onBack: () => void;
+  onViewProfile?: (userId: string) => void;
 }
 
 export const ChatHeader = memo(function ChatHeader({ conversation, otherTyping, onBack }: Props) {
