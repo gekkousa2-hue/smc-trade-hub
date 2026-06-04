@@ -19,7 +19,12 @@ import PrivacyPage from "./PrivacyPage";
 
 type SubPage = null | "settings" | "language" | "blocked" | "edit-profile" | "theme" | "notifications" | "privacy";
 
-export default function ProfilePage() {
+interface ProfilePageProps {
+  viewUserId?: string | null;
+  onBack?: () => void;
+}
+
+export default function ProfilePage({ viewUserId, onBack }: ProfilePageProps) {
   const { t } = useTranslation();
   const [user, setUser] = useState<SupaUser | null>(null);
   const [username, setUsername] = useState("");
@@ -28,9 +33,24 @@ export default function ProfilePage() {
   const [editName, setEditName] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [viewProfile, setViewProfile] = useState<{ username: string; avatar_url: string | null; created_at?: string; is_online?: boolean; last_seen?: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const isViewingOther = !!viewUserId;
+
   useEffect(() => {
+    if (isViewingOther) {
+      supabase
+        .from("profiles")
+        .select("username, avatar_url, created_at, is_online, last_seen")
+        .eq("user_id", viewUserId)
+        .single()
+        .then(({ data }) => {
+          if (data) setViewProfile(data as any);
+        });
+      return;
+    }
+    setViewProfile(null);
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user);
       if (data.user) {
@@ -48,7 +68,7 @@ export default function ProfilePage() {
           });
       }
     });
-  }, []);
+  }, [isViewingOther, viewUserId]);
 
   const handleLogout = async () => { await supabase.auth.signOut(); };
 
