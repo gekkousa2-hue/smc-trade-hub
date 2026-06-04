@@ -9,7 +9,11 @@ import { ContextMenu } from "@/components/chat/ContextMenu";
 import { MessageSkeleton } from "@/components/chat/SkeletonLoaders";
 import { VirtualMessageList, type VirtualMessageListHandle } from "@/components/chat/VirtualMessageList";
 
-export default function ChatPage() {
+interface ChatPageProps {
+  onViewProfile?: (userId: string) => void;
+}
+
+export default function ChatPage({ onViewProfile }: ChatPageProps) {
   const state = useChatState();
   const virtualListRef = useRef<VirtualMessageListHandle>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -134,6 +138,7 @@ export default function ChatPage() {
           onSearchChange={(q) => { state.setSearchQuery(q); state.setIsSearching(!!q); }}
           onOpenConversation={state.openConversation}
           onSelectConversation={(id) => { state.setActiveConversationId(id); state.setShowSidebar(false); }}
+          onViewProfile={onViewProfile}
         />
       </div>
 
@@ -145,6 +150,7 @@ export default function ChatPage() {
               conversation={activeConversation}
               otherTyping={state.otherTyping}
               onBack={() => state.setShowSidebar(true)}
+              onViewProfile={onViewProfile}
             />
 
             {/* Messages — virtualized */}

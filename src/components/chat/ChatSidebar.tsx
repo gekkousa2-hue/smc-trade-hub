@@ -16,11 +16,13 @@ interface Props {
   onSearchChange: (q: string) => void;
   onOpenConversation: (userId: string) => void;
   onSelectConversation: (id: string) => void;
+  onViewProfile?: (userId: string) => void;
 }
 
 export const ChatSidebar = memo(function ChatSidebar({
   conversations, activeConversationId, searchQuery, searchResults, isSearching,
   loadingConversations, onSearchChange, onOpenConversation, onSelectConversation,
+  onViewProfile,
 }: Props) {
   return (
     <>
@@ -65,7 +67,9 @@ export const ChatSidebar = memo(function ChatSidebar({
                 onClick={() => onOpenConversation(profile.user_id)}
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition-all hover:bg-secondary/80 active:scale-[0.98]"
               >
-                <UserAvatar userId={profile.user_id} username={profile.username} avatarUrl={profile.avatar_url} size="md" online={profile.is_online} />
+                <div onClick={(e) => { e.stopPropagation(); onViewProfile?.(profile.user_id); }} className="shrink-0">
+                  <UserAvatar userId={profile.user_id} username={profile.username} avatarUrl={profile.avatar_url} size="md" online={profile.is_online} />
+                </div>
                 <div className="text-left">
                   <p className="text-sm font-medium text-foreground">{profile.username}</p>
                   <p className="text-xs text-primary/70 font-mono">Xabar yozish →</p>
@@ -94,7 +98,9 @@ export const ChatSidebar = memo(function ChatSidebar({
                       : "hover:bg-secondary/50"
                   }`}
                 >
-                  <UserAvatar userId={conv.other_user?.user_id || ""} username={conv.other_user?.username || "?"} avatarUrl={conv.other_user?.avatar_url} size="md" online={conv.other_user?.is_online} />
+                  <div onClick={(e) => { e.stopPropagation(); onViewProfile?.(conv.other_user?.user_id || ""); }} className="shrink-0">
+                    <UserAvatar userId={conv.other_user?.user_id || ""} username={conv.other_user?.username || "?"} avatarUrl={conv.other_user?.avatar_url} size="md" online={conv.other_user?.is_online} />
+                  </div>
                   <div className="flex-1 min-w-0 text-left">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold text-foreground truncate">{conv.other_user?.username || "Noma'lum"}</p>
