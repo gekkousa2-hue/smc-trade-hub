@@ -16,6 +16,7 @@ interface Props {
   onSearchChange: (q: string) => void;
   onOpenConversation: (userId: string) => void;
   onSelectConversation: (id: string) => void;
+  onViewProfile?: (userId: string) => void;
 }
 
 export const ChatSidebar = memo(function ChatSidebar({
