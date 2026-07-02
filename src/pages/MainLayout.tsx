@@ -45,15 +45,18 @@ export default function MainLayout() {
     }
   }, [activeTab, refreshUnread]);
 
+  const [profileFrom, setProfileFrom] = useState<"chat" | "live">("chat");
+
   const handleViewProfile = useCallback((userId: string) => {
+    setProfileFrom(activeTab === "live" ? "live" : "chat");
     setProfileViewUserId(userId);
     setActiveTab("profile");
-  }, []);
+  }, [activeTab]);
 
   const handleBackFromProfile = useCallback(() => {
     setProfileViewUserId(null);
-    setActiveTab("chat");
-  }, []);
+    setActiveTab(profileFrom);
+  }, [profileFrom]);
 
   return (
     <div className="min-h-screen pb-[calc(4rem+env(safe-area-inset-bottom))]">
