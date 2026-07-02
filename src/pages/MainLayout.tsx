@@ -1,14 +1,14 @@
 import { useEffect, useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import BottomNav from "@/components/BottomNav";
-import Index from "./Index";
+import LiveFeedPage from "./LiveFeedPage";
 import ChatPage from "./ChatPage";
 import ProfilePage from "./ProfilePage";
 import AIPage from "./AIPage";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function MainLayout() {
-  const [activeTab, setActiveTab] = useState<"chart" | "chat" | "ai" | "profile">("chart");
+  const [activeTab, setActiveTab] = useState<"live" | "chat" | "ai" | "profile">("live");
   const [profileViewUserId, setProfileViewUserId] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -65,7 +65,7 @@ export default function MainLayout() {
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.2 }}
         >
-          {activeTab === "chart" && <Index />}
+          {activeTab === "live" && <LiveFeedPage onViewProfile={handleViewProfile} />}
           {activeTab === "ai" && <AIPage />}
           {activeTab === "chat" && <ChatPage onViewProfile={handleViewProfile} />}
           {activeTab === "profile" && <ProfilePage viewUserId={profileViewUserId} onBack={profileViewUserId ? handleBackFromProfile : undefined} />}
