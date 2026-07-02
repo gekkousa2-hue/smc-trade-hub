@@ -1,30 +1,30 @@
-import { CandlestickChart, MessageCircle, User, Bot } from "lucide-react";
+import { Radio, MessageCircle, User, Bot } from "lucide-react";
 import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 
 interface BottomNavProps {
-  activeTab: "chart" | "chat" | "ai" | "profile";
-  onTabChange: (tab: "chart" | "chat" | "ai" | "profile") => void;
+  activeTab: "live" | "chat" | "ai" | "profile";
+  onTabChange: (tab: "live" | "chat" | "ai" | "profile") => void;
   unreadCount?: number;
 }
 
 export default function BottomNav({ activeTab, onTabChange, unreadCount = 0 }: BottomNavProps) {
   const { t } = useTranslation();
   const tabs = [
-    { id: "chart" as const, label: t("nav.chart"), icon: CandlestickChart },
+    { id: "live" as const, label: t("nav.live", "Live"), icon: Radio },
     { id: "ai" as const, label: t("nav.ai"), icon: Bot },
     { id: "chat" as const, label: t("nav.chat"), icon: MessageCircle },
     { id: "profile" as const, label: t("nav.profile"), icon: User },
   ];
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50">
-      {/* Top fade gradient for depth */}
       <div className="absolute -top-6 left-0 right-0 h-6 bg-gradient-to-t from-background to-transparent pointer-events-none" />
       <div className="border-t border-border/40 bg-[hsl(220_22%_5%/0.85)] backdrop-blur-2xl">
         <div className="mx-auto flex max-w-md items-center justify-around py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
             const showBadge = tab.id === "chat" && unreadCount > 0;
+            const isLive = tab.id === "live";
             return (
               <button
                 key={tab.id}
@@ -53,6 +53,9 @@ export default function BottomNav({ activeTab, onTabChange, unreadCount = 0 }: B
                         : "text-muted-foreground/60"
                     }`}
                   />
+                  {isLive && !isActive && (
+                    <span className="absolute -top-0.5 -right-1 h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_6px_rgba(239,68,68,0.8)]" />
+                  )}
                   {showBadge && (
                     <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground shadow-[0_0_8px_hsl(45_93%_58%/0.6)]">
                       {unreadCount > 9 ? "9+" : unreadCount}
