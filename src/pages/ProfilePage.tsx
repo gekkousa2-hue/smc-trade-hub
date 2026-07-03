@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  LogOut, Settings, ChevronRight, Shield, X, Check, Camera, Loader2, ArrowLeft,
+  LogOut, Settings, ChevronRight, Shield, X, Check, Camera, Loader2, ArrowLeft, UserPlus, UserCheck,
 } from "lucide-react";
 import type { User as SupaUser } from "@supabase/supabase-js";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -16,6 +16,8 @@ import BlockedUsersPage from "./BlockedUsersPage";
 import ThemePage from "./ThemePage";
 import NotificationsPage from "./NotificationsPage";
 import PrivacyPage from "./PrivacyPage";
+import { getFollowStats, isFollowing, toggleFollow } from "@/lib/social";
+
 
 type SubPage = null | "settings" | "language" | "blocked" | "edit-profile" | "theme" | "notifications" | "privacy";
 
