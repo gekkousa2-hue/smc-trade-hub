@@ -8,6 +8,8 @@ import { LiveStreamPlayer } from "@/components/live/LiveStreamPlayer";
 import { LiveChat } from "@/components/live/LiveChat";
 import { GoLive } from "@/components/live/GoLive";
 import { UserAvatar } from "@/components/UserAvatar";
+import { StoriesBar } from "@/components/stories/StoriesBar";
+
 
 
 interface Props {
