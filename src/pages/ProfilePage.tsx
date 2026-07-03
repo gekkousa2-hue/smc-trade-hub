@@ -220,6 +220,36 @@ export default function ProfilePage({ viewUserId, onBack }: ProfilePageProps) {
           </div>
         </motion.div>
 
+        {/* Follow stats */}
+        <motion.div variants={item} className="flex items-center gap-6">
+          <div className="text-center">
+            <div className="text-lg font-bold text-foreground">{stats.followers}</div>
+            <div className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">Obunachi</div>
+          </div>
+          <div className="h-8 w-px bg-border/50" />
+          <div className="text-center">
+            <div className="text-lg font-bold text-foreground">{stats.following}</div>
+            <div className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">Obuna</div>
+          </div>
+        </motion.div>
+
+        {/* Follow button (viewing other) */}
+        {isViewingOther && (
+          <motion.button
+            variants={item}
+            onClick={handleToggleFollow}
+            disabled={followBusy}
+            className={`w-full h-11 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-60 ${
+              following
+                ? "bg-muted text-foreground border border-border hover:bg-accent"
+                : "bg-primary text-primary-foreground shadow-[0_8px_24px_-8px_hsl(var(--primary)/0.6)]"
+            }`}
+          >
+            {followBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : following ? <><UserCheck className="h-4 w-4" /> Obuna bo'lingan</> : <><UserPlus className="h-4 w-4" /> Obuna bo'lish</>}
+          </motion.button>
+        )}
+
+
         {/* Info Row */}
         <motion.div variants={item} className="w-full grid grid-cols-2 gap-3">
           {isViewingOther ? (
