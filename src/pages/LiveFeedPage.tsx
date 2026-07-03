@@ -262,7 +262,7 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
   );
 }
 
-function EmptyState({ onGoLive, canGoLive }: { onGoLive: () => void; canGoLive: boolean }) {
+function EmptyState({ onGoLive, isAuthed }: { onGoLive: () => void; isAuthed: boolean }) {
   return (
     <div className="h-full flex flex-col items-center justify-center text-center px-6 gap-4">
       <div className="h-20 w-20 rounded-3xl bg-primary/10 border border-primary/30 flex items-center justify-center">
@@ -271,17 +271,18 @@ function EmptyState({ onGoLive, canGoLive }: { onGoLive: () => void; canGoLive: 
       <div>
         <h2 className="text-lg font-bold text-white">Hozircha efir yo'q</h2>
         <p className="text-sm text-white/60 mt-1 max-w-xs">
-          Birinchi bo'lib jonli efirga chiqing va treyderlar bilan bo'lishing
+          {isAuthed
+            ? "Birinchi bo'lib jonli efirga chiqing va treyderlar bilan bo'lishing"
+            : "Efirga chiqish va like bosish uchun tizimga kiring"}
         </p>
       </div>
-      {canGoLive && (
-        <button
-          onClick={onGoLive}
-          className="flex items-center gap-2 rounded-full bg-gradient-to-r from-red-500 to-red-600 text-white px-5 py-3 font-bold text-sm shadow-[0_10px_40px_-10px_rgba(239,68,68,0.6)]"
-        >
-          <Radio className="h-4 w-4" /> Efirni boshlash
-        </button>
-      )}
+      <button
+        onClick={onGoLive}
+        className="flex items-center gap-2 rounded-full bg-gradient-to-r from-red-500 to-red-600 text-white px-5 py-3 font-bold text-sm shadow-[0_10px_40px_-10px_rgba(239,68,68,0.6)]"
+      >
+        {isAuthed ? <><Radio className="h-4 w-4" /> Efirni boshlash</> : <><LogIn className="h-4 w-4" /> Kirish</>}
+      </button>
     </div>
   );
 }
+
