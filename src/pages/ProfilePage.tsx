@@ -36,9 +36,13 @@ export default function ProfilePage({ viewUserId, onBack }: ProfilePageProps) {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [viewProfile, setViewProfile] = useState<{ username: string; avatar_url: string | null; created_at?: string; is_online?: boolean; last_seen?: string } | null>(null);
+  const [stats, setStats] = useState({ followers: 0, following: 0 });
+  const [following, setFollowing] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isViewingOther = !!viewUserId;
+
 
   useEffect(() => {
     if (isViewingOther) {
@@ -72,7 +76,38 @@ export default function ProfilePage({ viewUserId, onBack }: ProfilePageProps) {
     });
   }, [isViewingOther, viewUserId]);
 
+  // Load follow stats + own follow relation
+  useEffect(() => {
+    const targetId = viewUserId || null;
+    (async () => {
+      const { data: { user: me } } = await supabase.auth.getUser();
+      const uid = targetId || me?.id;
+      if (!uid) return;
+      const s = await getFollowStats(uid);
+      setStats(s);
+      if (targetId && me && me.id !== targetId) {
+        setFollowing(await isFollowing(me.id, targetId));
+      }
+    })();
+  }, [viewUserId]);
+
+  const handleToggleFollow = async () => {
+    if (!viewUserId) return;
+    setFollowBusy(true);
+    try {
+      const res = await toggleFollow(viewUserId);
+      setFollowing(res === "followed");
+      setStats((s) => ({ ...s, followers: Math.max(0, s.followers + (res === "followed" ? 1 : -1)) }));
+    } catch (e) {
+      const m = (e as Error).message;
+      toast.error(m === "AUTH_REQUIRED" ? "Tizimga kiring" : "Xatolik");
+    } finally {
+      setFollowBusy(false);
+    }
+  };
+
   const handleLogout = async () => { await supabase.auth.signOut(); };
+
 
   const handleSaveName = async () => {
     if (!user) return;
