@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Radio, Heart, Users, MessageCircle, Loader2 } from "lucide-react";
+import { Radio, Heart, Users, MessageCircle, Loader2, LogIn } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchActiveStreams, incrementViewer, likeStream, type LiveStream } from "@/lib/liveStream";
+import { fetchActiveStreams, incrementViewer, toggleLikeStream, fetchLikedStreamIds, type LiveStream } from "@/lib/liveStream";
 import { LiveStreamPlayer } from "@/components/live/LiveStreamPlayer";
 import { LiveChat } from "@/components/live/LiveChat";
 import { GoLive } from "@/components/live/GoLive";
 import { UserAvatar } from "@/components/UserAvatar";
+
 
 interface Props {
   onViewProfile?: (userId: string) => void;
@@ -79,8 +81,40 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
     };
   }, [currentIndex, streams]);
 
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+
+  // Load which streams the current user has liked
+  useEffect(() => {
+    if (!user || streams.length === 0) return;
+    fetchLikedStreamIds(streams.map((s) => s.id)).then(setLikedIds).catch(() => {});
+  }, [user, streams]);
+
   const handleLike = async (streamId: string) => {
-    await likeStream(streamId);
+    if (!user) {
+      toast.error("Like bosish uchun tizimga kiring");
+      return;
+    }
+    try {
+      const result = await toggleLikeStream(streamId);
+      setLikedIds((prev) => {
+        const next = new Set(prev);
+        if (result === "liked") next.add(streamId); else next.delete(streamId);
+        return next;
+      });
+    } catch (e) {
+      const msg = (e as Error).message === "AUTH_REQUIRED"
+        ? "Like bosish uchun tizimga kiring"
+        : "Like saqlanmadi";
+      toast.error(msg);
+    }
+  };
+
+  const handleGoLive = () => {
+    if (!user) {
+      toast.error("Efirga chiqish uchun tizimga kiring");
+      return;
+    }
+    setShowGoLive(true);
   };
 
   if (showGoLive && user) {
@@ -92,6 +126,7 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
       />
     );
   }
+
 
   return (
     <div className="fixed inset-0 top-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] bg-black overflow-hidden">
