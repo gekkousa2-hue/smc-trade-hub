@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Radio, Heart, Users, MessageCircle, Loader2 } from "lucide-react";
+import { Radio, Heart, Users, MessageCircle, Loader2, LogIn } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchActiveStreams, incrementViewer, likeStream, type LiveStream } from "@/lib/liveStream";
+import { fetchActiveStreams, incrementViewer, toggleLikeStream, fetchLikedStreamIds, type LiveStream } from "@/lib/liveStream";
 import { LiveStreamPlayer } from "@/components/live/LiveStreamPlayer";
 import { LiveChat } from "@/components/live/LiveChat";
 import { GoLive } from "@/components/live/GoLive";
 import { UserAvatar } from "@/components/UserAvatar";
+
 
 interface Props {
   onViewProfile?: (userId: string) => void;
@@ -79,8 +81,40 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
     };
   }, [currentIndex, streams]);
 
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+
+  // Load which streams the current user has liked
+  useEffect(() => {
+    if (!user || streams.length === 0) return;
+    fetchLikedStreamIds(streams.map((s) => s.id)).then(setLikedIds).catch(() => {});
+  }, [user, streams]);
+
   const handleLike = async (streamId: string) => {
-    await likeStream(streamId);
+    if (!user) {
+      toast.error("Like bosish uchun tizimga kiring");
+      return;
+    }
+    try {
+      const result = await toggleLikeStream(streamId);
+      setLikedIds((prev) => {
+        const next = new Set(prev);
+        if (result === "liked") next.add(streamId); else next.delete(streamId);
+        return next;
+      });
+    } catch (e) {
+      const msg = (e as Error).message === "AUTH_REQUIRED"
+        ? "Like bosish uchun tizimga kiring"
+        : "Like saqlanmadi";
+      toast.error(msg);
+    }
+  };
+
+  const handleGoLive = () => {
+    if (!user) {
+      toast.error("Efirga chiqish uchun tizimga kiring");
+      return;
+    }
+    setShowGoLive(true);
   };
 
   if (showGoLive && user) {
@@ -93,6 +127,7 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
     );
   }
 
+
   return (
     <div className="fixed inset-0 top-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] bg-black overflow-hidden">
       {loading ? (
@@ -100,7 +135,7 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : streams.length === 0 ? (
-        <EmptyState onGoLive={() => user ? setShowGoLive(true) : null} canGoLive={!!user} />
+        <EmptyState onGoLive={handleGoLive} isAuthed={!!user} />
       ) : (
         <div
           ref={containerRef}
@@ -161,12 +196,14 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
                 <button
                   onClick={() => handleLike(s.id)}
                   className="flex flex-col items-center gap-1 group"
+                  aria-label={likedIds.has(s.id) ? "Like olib tashlash" : "Like bosish"}
                 >
-                  <div className="h-11 w-11 rounded-full bg-black/40 backdrop-blur flex items-center justify-center border border-white/10 group-active:scale-90 transition-transform">
-                    <Heart className="h-5 w-5 text-red-400 group-hover:fill-red-400 transition-all" />
+                  <div className={`h-11 w-11 rounded-full backdrop-blur flex items-center justify-center border transition-all group-active:scale-90 ${likedIds.has(s.id) ? "bg-red-500/20 border-red-400/50" : "bg-black/40 border-white/10"}`}>
+                    <Heart className={`h-5 w-5 transition-all ${likedIds.has(s.id) ? "text-red-400 fill-red-400" : "text-red-400"}`} />
                   </div>
                   <span className="text-[10px] text-white font-semibold drop-shadow">{s.like_count}</span>
                 </button>
+
                 <button
                   onClick={() => setShowChat(true)}
                   className="flex flex-col items-center gap-1 group"
@@ -183,16 +220,18 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
       )}
 
       {/* Floating Go Live button */}
-      {user && !showChat && (
+      {!showChat && (
         <motion.button
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          onClick={() => setShowGoLive(true)}
+          onClick={handleGoLive}
           className="absolute right-4 top-[calc(env(safe-area-inset-top)+3.5rem)] z-20 flex items-center gap-1.5 rounded-full bg-gradient-to-r from-primary to-primary/80 text-primary-foreground px-4 py-2 font-bold text-xs shadow-[0_8px_32px_-4px_hsl(var(--primary)/0.6)]"
         >
-          <Radio className="h-3.5 w-3.5" /> Efirga chiqish
+          {user ? <Radio className="h-3.5 w-3.5" /> : <LogIn className="h-3.5 w-3.5" />}
+          {user ? "Efirga chiqish" : "Kirish"}
         </motion.button>
       )}
+
 
       {/* Chat overlay */}
       <AnimatePresence>
@@ -223,7 +262,7 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
   );
 }
 
-function EmptyState({ onGoLive, canGoLive }: { onGoLive: () => void; canGoLive: boolean }) {
+function EmptyState({ onGoLive, isAuthed }: { onGoLive: () => void; isAuthed: boolean }) {
   return (
     <div className="h-full flex flex-col items-center justify-center text-center px-6 gap-4">
       <div className="h-20 w-20 rounded-3xl bg-primary/10 border border-primary/30 flex items-center justify-center">
@@ -232,17 +271,18 @@ function EmptyState({ onGoLive, canGoLive }: { onGoLive: () => void; canGoLive: 
       <div>
         <h2 className="text-lg font-bold text-white">Hozircha efir yo'q</h2>
         <p className="text-sm text-white/60 mt-1 max-w-xs">
-          Birinchi bo'lib jonli efirga chiqing va treyderlar bilan bo'lishing
+          {isAuthed
+            ? "Birinchi bo'lib jonli efirga chiqing va treyderlar bilan bo'lishing"
+            : "Efirga chiqish va like bosish uchun tizimga kiring"}
         </p>
       </div>
-      {canGoLive && (
-        <button
-          onClick={onGoLive}
-          className="flex items-center gap-2 rounded-full bg-gradient-to-r from-red-500 to-red-600 text-white px-5 py-3 font-bold text-sm shadow-[0_10px_40px_-10px_rgba(239,68,68,0.6)]"
-        >
-          <Radio className="h-4 w-4" /> Efirni boshlash
-        </button>
-      )}
+      <button
+        onClick={onGoLive}
+        className="flex items-center gap-2 rounded-full bg-gradient-to-r from-red-500 to-red-600 text-white px-5 py-3 font-bold text-sm shadow-[0_10px_40px_-10px_rgba(239,68,68,0.6)]"
+      >
+        {isAuthed ? <><Radio className="h-4 w-4" /> Efirni boshlash</> : <><LogIn className="h-4 w-4" /> Kirish</>}
+      </button>
     </div>
   );
 }
+

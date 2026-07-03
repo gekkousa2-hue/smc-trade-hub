@@ -90,8 +90,37 @@ export async function incrementViewer(streamId: string, delta: 1 | -1) {
   await supabase.from("live_streams").update({ viewer_count: next }).eq("id", streamId);
 }
 
-export async function likeStream(streamId: string) {
-  const { data } = await supabase.from("live_streams").select("like_count").eq("id", streamId).single();
-  const cur = (data as any)?.like_count ?? 0;
-  await supabase.from("live_streams").update({ like_count: cur + 1 }).eq("id", streamId);
+export async function toggleLikeStream(streamId: string): Promise<"liked" | "unliked"> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("AUTH_REQUIRED");
+
+  // Try insert first; on unique conflict, remove instead (toggle)
+  const { error: insertErr } = await supabase
+    .from("stream_likes")
+    .insert({ stream_id: streamId, user_id: user.id });
+
+  if (!insertErr) return "liked";
+
+  // 23505 = unique violation → user already liked, so unlike
+  if ((insertErr as any).code === "23505") {
+    await supabase
+      .from("stream_likes")
+      .delete()
+      .eq("stream_id", streamId)
+      .eq("user_id", user.id);
+    return "unliked";
+  }
+  throw insertErr;
 }
+
+export async function fetchLikedStreamIds(streamIds: string[]): Promise<Set<string>> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || streamIds.length === 0) return new Set();
+  const { data } = await supabase
+    .from("stream_likes")
+    .select("stream_id")
+    .eq("user_id", user.id)
+    .in("stream_id", streamIds);
+  return new Set((data || []).map((r: any) => r.stream_id));
+}
+
