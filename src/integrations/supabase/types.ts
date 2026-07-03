@@ -210,6 +210,35 @@ export type Database = {
         }
         Relationships: []
       }
+      stream_likes: {
+        Row: {
+          created_at: string
+          id: string
+          stream_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          stream_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          stream_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stream_likes_stream_id_fkey"
+            columns: ["stream_id"]
+            isOneToOne: false
+            referencedRelation: "live_streams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stream_messages: {
         Row: {
           content: string
