@@ -44,6 +44,28 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Verify the room exists and, if requesting host, that caller owns it.
+    const { data: streamRow, error: streamErr } = await supabase
+      .from('live_streams')
+      .select('host_user_id, is_active')
+      .eq('room_name', roomName)
+      .maybeSingle();
+
+    if (streamErr || !streamRow) {
+      return new Response(JSON.stringify({ error: 'Stream not found' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (role === 'host' && streamRow.host_user_id !== userId) {
+      return new Response(JSON.stringify({ error: 'Forbidden: not the stream host' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+
     const apiKey = Deno.env.get('LIVEKIT_API_KEY');
     const apiSecret = Deno.env.get('LIVEKIT_API_SECRET');
     const wsUrl = Deno.env.get('LIVEKIT_WS_URL');
