@@ -69,7 +69,7 @@ export default function MainLayout() {
           transition={{ duration: 0.2 }}
         >
           {activeTab === "live" && <LiveFeedPage onViewProfile={handleViewProfile} />}
-          {activeTab === "ai" && <AIPage />}
+          {/* Trade-AI removed */}
           {activeTab === "chat" && <ChatPage onViewProfile={handleViewProfile} />}
           {activeTab === "profile" && <ProfilePage viewUserId={profileViewUserId} onBack={profileViewUserId ? handleBackFromProfile : undefined} />}
         </motion.div>
