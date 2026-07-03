@@ -74,6 +74,27 @@ export type Database = {
           },
         ]
       }
+      follows: {
+        Row: {
+          created_at: string
+          follower_id: string
+          following_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          follower_id: string
+          following_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          follower_id?: string
+          following_id?: string
+          id?: string
+        }
+        Relationships: []
+      }
       live_streams: {
         Row: {
           created_at: string
@@ -207,6 +228,36 @@ export type Database = {
           updated_at?: string
           user_id?: string
           username?: string
+        }
+        Relationships: []
+      }
+      stories: {
+        Row: {
+          caption: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          media_type: string
+          media_url: string
+          user_id: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          media_type: string
+          media_url: string
+          user_id: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          media_type?: string
+          media_url?: string
+          user_id?: string
         }
         Relationships: []
       }
