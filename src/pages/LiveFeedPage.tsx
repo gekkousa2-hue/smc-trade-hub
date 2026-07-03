@@ -135,7 +135,7 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : streams.length === 0 ? (
-        <EmptyState onGoLive={() => user ? setShowGoLive(true) : null} canGoLive={!!user} />
+        <EmptyState onGoLive={handleGoLive} isAuthed={!!user} />
       ) : (
         <div
           ref={containerRef}
@@ -196,12 +196,14 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
                 <button
                   onClick={() => handleLike(s.id)}
                   className="flex flex-col items-center gap-1 group"
+                  aria-label={likedIds.has(s.id) ? "Like olib tashlash" : "Like bosish"}
                 >
-                  <div className="h-11 w-11 rounded-full bg-black/40 backdrop-blur flex items-center justify-center border border-white/10 group-active:scale-90 transition-transform">
-                    <Heart className="h-5 w-5 text-red-400 group-hover:fill-red-400 transition-all" />
+                  <div className={`h-11 w-11 rounded-full backdrop-blur flex items-center justify-center border transition-all group-active:scale-90 ${likedIds.has(s.id) ? "bg-red-500/20 border-red-400/50" : "bg-black/40 border-white/10"}`}>
+                    <Heart className={`h-5 w-5 transition-all ${likedIds.has(s.id) ? "text-red-400 fill-red-400" : "text-red-400"}`} />
                   </div>
                   <span className="text-[10px] text-white font-semibold drop-shadow">{s.like_count}</span>
                 </button>
+
                 <button
                   onClick={() => setShowChat(true)}
                   className="flex flex-col items-center gap-1 group"
@@ -218,16 +220,18 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
       )}
 
       {/* Floating Go Live button */}
-      {user && !showChat && (
+      {!showChat && (
         <motion.button
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          onClick={() => setShowGoLive(true)}
+          onClick={handleGoLive}
           className="absolute right-4 top-[calc(env(safe-area-inset-top)+3.5rem)] z-20 flex items-center gap-1.5 rounded-full bg-gradient-to-r from-primary to-primary/80 text-primary-foreground px-4 py-2 font-bold text-xs shadow-[0_8px_32px_-4px_hsl(var(--primary)/0.6)]"
         >
-          <Radio className="h-3.5 w-3.5" /> Efirga chiqish
+          {user ? <Radio className="h-3.5 w-3.5" /> : <LogIn className="h-3.5 w-3.5" />}
+          {user ? "Efirga chiqish" : "Kirish"}
         </motion.button>
       )}
+
 
       {/* Chat overlay */}
       <AnimatePresence>
