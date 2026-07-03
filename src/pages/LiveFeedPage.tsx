@@ -8,6 +8,8 @@ import { LiveStreamPlayer } from "@/components/live/LiveStreamPlayer";
 import { LiveChat } from "@/components/live/LiveChat";
 import { GoLive } from "@/components/live/GoLive";
 import { UserAvatar } from "@/components/UserAvatar";
+import { StoriesBar } from "@/components/stories/StoriesBar";
+
 
 
 interface Props {
@@ -130,6 +132,11 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
 
   return (
     <div className="fixed inset-0 top-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] bg-black overflow-hidden">
+      {/* Stories bar */}
+      <div className="absolute top-0 left-0 right-0 z-30 pt-[env(safe-area-inset-top)] bg-gradient-to-b from-black/85 via-black/70 to-transparent">
+        <StoriesBar onViewProfile={onViewProfile} />
+      </div>
+
       {loading ? (
         <div className="h-full flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -137,6 +144,7 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
       ) : streams.length === 0 ? (
         <EmptyState onGoLive={handleGoLive} isAuthed={!!user} />
       ) : (
+
         <div
           ref={containerRef}
           onScroll={handleScroll}

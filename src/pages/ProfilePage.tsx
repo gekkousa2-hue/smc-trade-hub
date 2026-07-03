@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  LogOut, Settings, ChevronRight, Shield, X, Check, Camera, Loader2, ArrowLeft,
+  LogOut, Settings, ChevronRight, Shield, X, Check, Camera, Loader2, ArrowLeft, UserPlus, UserCheck,
 } from "lucide-react";
 import type { User as SupaUser } from "@supabase/supabase-js";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -16,6 +16,8 @@ import BlockedUsersPage from "./BlockedUsersPage";
 import ThemePage from "./ThemePage";
 import NotificationsPage from "./NotificationsPage";
 import PrivacyPage from "./PrivacyPage";
+import { getFollowStats, isFollowing, toggleFollow } from "@/lib/social";
+
 
 type SubPage = null | "settings" | "language" | "blocked" | "edit-profile" | "theme" | "notifications" | "privacy";
 
@@ -34,9 +36,13 @@ export default function ProfilePage({ viewUserId, onBack }: ProfilePageProps) {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [viewProfile, setViewProfile] = useState<{ username: string; avatar_url: string | null; created_at?: string; is_online?: boolean; last_seen?: string } | null>(null);
+  const [stats, setStats] = useState({ followers: 0, following: 0 });
+  const [following, setFollowing] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isViewingOther = !!viewUserId;
+
 
   useEffect(() => {
     if (isViewingOther) {
@@ -70,7 +76,38 @@ export default function ProfilePage({ viewUserId, onBack }: ProfilePageProps) {
     });
   }, [isViewingOther, viewUserId]);
 
+  // Load follow stats + own follow relation
+  useEffect(() => {
+    const targetId = viewUserId || null;
+    (async () => {
+      const { data: { user: me } } = await supabase.auth.getUser();
+      const uid = targetId || me?.id;
+      if (!uid) return;
+      const s = await getFollowStats(uid);
+      setStats(s);
+      if (targetId && me && me.id !== targetId) {
+        setFollowing(await isFollowing(me.id, targetId));
+      }
+    })();
+  }, [viewUserId]);
+
+  const handleToggleFollow = async () => {
+    if (!viewUserId) return;
+    setFollowBusy(true);
+    try {
+      const res = await toggleFollow(viewUserId);
+      setFollowing(res === "followed");
+      setStats((s) => ({ ...s, followers: Math.max(0, s.followers + (res === "followed" ? 1 : -1)) }));
+    } catch (e) {
+      const m = (e as Error).message;
+      toast.error(m === "AUTH_REQUIRED" ? "Tizimga kiring" : "Xatolik");
+    } finally {
+      setFollowBusy(false);
+    }
+  };
+
   const handleLogout = async () => { await supabase.auth.signOut(); };
+
 
   const handleSaveName = async () => {
     if (!user) return;
@@ -182,6 +219,36 @@ export default function ProfilePage({ viewUserId, onBack }: ProfilePageProps) {
             <span className="text-xs font-bold text-primary font-mono tracking-wider">{t("profile.elite")}</span>
           </div>
         </motion.div>
+
+        {/* Follow stats */}
+        <motion.div variants={item} className="flex items-center gap-6">
+          <div className="text-center">
+            <div className="text-lg font-bold text-foreground">{stats.followers}</div>
+            <div className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">Obunachi</div>
+          </div>
+          <div className="h-8 w-px bg-border/50" />
+          <div className="text-center">
+            <div className="text-lg font-bold text-foreground">{stats.following}</div>
+            <div className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">Obuna</div>
+          </div>
+        </motion.div>
+
+        {/* Follow button (viewing other) */}
+        {isViewingOther && (
+          <motion.button
+            variants={item}
+            onClick={handleToggleFollow}
+            disabled={followBusy}
+            className={`w-full h-11 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-60 ${
+              following
+                ? "bg-muted text-foreground border border-border hover:bg-accent"
+                : "bg-primary text-primary-foreground shadow-[0_8px_24px_-8px_hsl(var(--primary)/0.6)]"
+            }`}
+          >
+            {followBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : following ? <><UserCheck className="h-4 w-4" /> Obuna bo'lingan</> : <><UserPlus className="h-4 w-4" /> Obuna bo'lish</>}
+          </motion.button>
+        )}
+
 
         {/* Info Row */}
         <motion.div variants={item} className="w-full grid grid-cols-2 gap-3">

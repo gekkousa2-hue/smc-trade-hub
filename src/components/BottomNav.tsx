@@ -1,10 +1,10 @@
-import { Radio, MessageCircle, User, Bot } from "lucide-react";
+import { Radio, MessageCircle, User } from "lucide-react";
 import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 
 interface BottomNavProps {
-  activeTab: "live" | "chat" | "ai" | "profile";
-  onTabChange: (tab: "live" | "chat" | "ai" | "profile") => void;
+  activeTab: "live" | "chat" | "profile";
+  onTabChange: (tab: "live" | "chat" | "profile") => void;
   unreadCount?: number;
 }
 
@@ -12,10 +12,10 @@ export default function BottomNav({ activeTab, onTabChange, unreadCount = 0 }: B
   const { t } = useTranslation();
   const tabs = [
     { id: "live" as const, label: t("nav.live", "Live"), icon: Radio },
-    { id: "ai" as const, label: t("nav.ai"), icon: Bot },
     { id: "chat" as const, label: t("nav.chat"), icon: MessageCircle },
     { id: "profile" as const, label: t("nav.profile"), icon: User },
   ];
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50">
       <div className="absolute -top-6 left-0 right-0 h-6 bg-gradient-to-t from-background to-transparent pointer-events-none" />

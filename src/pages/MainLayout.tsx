@@ -4,11 +4,10 @@ import BottomNav from "@/components/BottomNav";
 import LiveFeedPage from "./LiveFeedPage";
 import ChatPage from "./ChatPage";
 import ProfilePage from "./ProfilePage";
-import AIPage from "./AIPage";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function MainLayout() {
-  const [activeTab, setActiveTab] = useState<"live" | "chat" | "ai" | "profile">("live");
+  const [activeTab, setActiveTab] = useState<"live" | "chat" | "profile">("live");
   const [profileViewUserId, setProfileViewUserId] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -37,7 +36,6 @@ export default function MainLayout() {
     return () => { cleanup?.(); };
   }, [refreshUnread]);
 
-  // Refresh when switching to chat (resets badge after viewing)
   useEffect(() => {
     if (activeTab === "chat") {
       const t = setTimeout(refreshUnread, 1500);
@@ -69,7 +67,6 @@ export default function MainLayout() {
           transition={{ duration: 0.2 }}
         >
           {activeTab === "live" && <LiveFeedPage onViewProfile={handleViewProfile} />}
-          {activeTab === "ai" && <AIPage />}
           {activeTab === "chat" && <ChatPage onViewProfile={handleViewProfile} />}
           {activeTab === "profile" && <ProfilePage viewUserId={profileViewUserId} onBack={profileViewUserId ? handleBackFromProfile : undefined} />}
         </motion.div>
