@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  LogOut, Settings, ChevronRight, Shield, X, Check, Camera, Loader2, ArrowLeft, UserPlus, UserCheck,
+  LogOut, Settings, ChevronRight, Shield, X, Check, Camera, Loader2, ArrowLeft, UserPlus, UserCheck, Radio,
 } from "lucide-react";
 import type { User as SupaUser } from "@supabase/supabase-js";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
