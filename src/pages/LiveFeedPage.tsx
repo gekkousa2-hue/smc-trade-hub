@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Radio, Heart, Users, MessageCircle, Loader2, LogIn } from "lucide-react";
+import { Radio, Heart, Users, MessageCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchActiveStreams, incrementViewer, toggleLikeStream, fetchLikedStreamIds, type LiveStream } from "@/lib/liveStream";
 import { LiveStreamPlayer } from "@/components/live/LiveStreamPlayer";
 import { LiveChat } from "@/components/live/LiveChat";
-import { GoLive } from "@/components/live/GoLive";
 import { UserAvatar } from "@/components/UserAvatar";
 import { StoriesBar } from "@/components/stories/StoriesBar";
 
