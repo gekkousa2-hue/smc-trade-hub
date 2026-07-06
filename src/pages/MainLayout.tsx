@@ -93,10 +93,24 @@ export default function MainLayout() {
         >
           {activeTab === "live" && <LiveFeedPage onViewProfile={handleViewProfile} />}
           {activeTab === "chat" && <ChatPage onViewProfile={handleViewProfile} />}
-          {activeTab === "profile" && <ProfilePage viewUserId={profileViewUserId} onBack={profileViewUserId ? handleBackFromProfile : undefined} />}
+          {activeTab === "profile" && (
+            <ProfilePage
+              viewUserId={profileViewUserId}
+              onBack={profileViewUserId ? handleBackFromProfile : undefined}
+              onGoLive={handleGoLive}
+            />
+          )}
         </motion.div>
       </AnimatePresence>
       <BottomNav activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (tab !== "profile") setProfileViewUserId(null); }} unreadCount={activeTab === "chat" ? 0 : unreadCount} />
+
+      {showGoLive && goLiveUser && (
+        <GoLive
+          onClose={handleCloseGoLive}
+          currentUserId={goLiveUser.id}
+          currentUsername={goLiveUser.username}
+        />
+      )}
     </div>
   );
 }
