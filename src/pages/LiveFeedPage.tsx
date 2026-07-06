@@ -109,23 +109,6 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
     }
   };
 
-  const handleGoLive = () => {
-    if (!user) {
-      toast.error("Efirga chiqish uchun tizimga kiring");
-      return;
-    }
-    setShowGoLive(true);
-  };
-
-  if (showGoLive && user) {
-    return (
-      <GoLive
-        onClose={() => { setShowGoLive(false); loadStreams(); }}
-        currentUserId={user.id}
-        currentUsername={user.username}
-      />
-    );
-  }
 
 
   return (
