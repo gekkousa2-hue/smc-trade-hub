@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  LogOut, Settings, ChevronRight, Shield, X, Check, Camera, Loader2, ArrowLeft, UserPlus, UserCheck,
+  LogOut, Settings, ChevronRight, Shield, X, Check, Camera, Loader2, ArrowLeft, UserPlus, UserCheck, Radio,
 } from "lucide-react";
 import type { User as SupaUser } from "@supabase/supabase-js";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -24,9 +24,10 @@ type SubPage = null | "settings" | "language" | "blocked" | "edit-profile" | "th
 interface ProfilePageProps {
   viewUserId?: string | null;
   onBack?: () => void;
+  onGoLive?: () => void;
 }
 
-export default function ProfilePage({ viewUserId, onBack }: ProfilePageProps) {
+export default function ProfilePage({ viewUserId, onBack, onGoLive }: ProfilePageProps) {
   const { t } = useTranslation();
   const [user, setUser] = useState<SupaUser | null>(null);
   const [username, setUsername] = useState("");
@@ -290,6 +291,17 @@ export default function ProfilePage({ viewUserId, onBack }: ProfilePageProps) {
         {/* Menu Items */}
         {!isViewingOther && (
           <motion.div variants={item} className="w-full space-y-2.5 mt-2">
+            <button
+              onClick={onGoLive}
+              className="flex w-full items-center gap-3 premium-card rounded-2xl px-4 py-4 transition-all duration-200 hover:border-red-500/30 hover:shadow-[0_0_20px_-8px_rgba(239,68,68,0.4)] active:scale-[0.98]"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10 ring-1 ring-red-500/20">
+                <Radio className="h-[18px] w-[18px] text-red-500" />
+              </div>
+              <span className="text-sm font-semibold text-foreground flex-1 text-left">Efirga chiqish</span>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </button>
+
             <button
               onClick={() => setSubPage("settings")}
               className="flex w-full items-center gap-3 premium-card rounded-2xl px-4 py-4 transition-all duration-200 hover:border-primary/30 hover:shadow-[0_0_20px_-8px_hsl(var(--primary)/0.4)] active:scale-[0.98]"

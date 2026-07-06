@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Radio, Heart, Users, MessageCircle, Loader2, LogIn } from "lucide-react";
+import { Radio, Heart, Users, MessageCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchActiveStreams, incrementViewer, toggleLikeStream, fetchLikedStreamIds, type LiveStream } from "@/lib/liveStream";
 import { LiveStreamPlayer } from "@/components/live/LiveStreamPlayer";
 import { LiveChat } from "@/components/live/LiveChat";
-import { GoLive } from "@/components/live/GoLive";
 import { UserAvatar } from "@/components/UserAvatar";
 import { StoriesBar } from "@/components/stories/StoriesBar";
 
@@ -21,7 +20,6 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showChat, setShowChat] = useState(false);
-  const [showGoLive, setShowGoLive] = useState(false);
   const [user, setUser] = useState<{ id: string; username: string; avatar_url: string | null } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerCountedRef = useRef<Set<string>>(new Set());
@@ -111,23 +109,6 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
     }
   };
 
-  const handleGoLive = () => {
-    if (!user) {
-      toast.error("Efirga chiqish uchun tizimga kiring");
-      return;
-    }
-    setShowGoLive(true);
-  };
-
-  if (showGoLive && user) {
-    return (
-      <GoLive
-        onClose={() => { setShowGoLive(false); loadStreams(); }}
-        currentUserId={user.id}
-        currentUsername={user.username}
-      />
-    );
-  }
 
 
   return (
@@ -142,7 +123,7 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : streams.length === 0 ? (
-        <EmptyState onGoLive={handleGoLive} isAuthed={!!user} />
+        <EmptyState />
       ) : (
 
         <div
@@ -227,20 +208,6 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
         </div>
       )}
 
-      {/* Floating Go Live button */}
-      {!showChat && (
-        <motion.button
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          onClick={handleGoLive}
-          className="absolute right-4 top-[calc(env(safe-area-inset-top)+3.5rem)] z-20 flex items-center gap-1.5 rounded-full bg-gradient-to-r from-primary to-primary/80 text-primary-foreground px-4 py-2 font-bold text-xs shadow-[0_8px_32px_-4px_hsl(var(--primary)/0.6)]"
-        >
-          {user ? <Radio className="h-3.5 w-3.5" /> : <LogIn className="h-3.5 w-3.5" />}
-          {user ? "Efirga chiqish" : "Kirish"}
-        </motion.button>
-      )}
-
-
       {/* Chat overlay */}
       <AnimatePresence>
         {showChat && streams[currentIndex] && (
@@ -270,7 +237,7 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
   );
 }
 
-function EmptyState({ onGoLive, isAuthed }: { onGoLive: () => void; isAuthed: boolean }) {
+function EmptyState() {
   return (
     <div className="h-full flex flex-col items-center justify-center text-center px-6 gap-4">
       <div className="h-20 w-20 rounded-3xl bg-primary/10 border border-primary/30 flex items-center justify-center">
@@ -279,17 +246,9 @@ function EmptyState({ onGoLive, isAuthed }: { onGoLive: () => void; isAuthed: bo
       <div>
         <h2 className="text-lg font-bold text-white">Hozircha efir yo'q</h2>
         <p className="text-sm text-white/60 mt-1 max-w-xs">
-          {isAuthed
-            ? "Birinchi bo'lib jonli efirga chiqing va treyderlar bilan bo'lishing"
-            : "Efirga chiqish va like bosish uchun tizimga kiring"}
+          Profil bo'limidan efirga chiqish tugmasini bosing va jonli efirni boshlang
         </p>
       </div>
-      <button
-        onClick={onGoLive}
-        className="flex items-center gap-2 rounded-full bg-gradient-to-r from-red-500 to-red-600 text-white px-5 py-3 font-bold text-sm shadow-[0_10px_40px_-10px_rgba(239,68,68,0.6)]"
-      >
-        {isAuthed ? <><Radio className="h-4 w-4" /> Efirni boshlash</> : <><LogIn className="h-4 w-4" /> Kirish</>}
-      </button>
     </div>
   );
 }
