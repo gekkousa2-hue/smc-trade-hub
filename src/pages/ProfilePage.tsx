@@ -24,6 +24,7 @@ type SubPage = null | "settings" | "language" | "blocked" | "edit-profile" | "th
 interface ProfilePageProps {
   viewUserId?: string | null;
   onBack?: () => void;
+  onGoLive?: () => void;
 }
 
 export default function ProfilePage({ viewUserId, onBack }: ProfilePageProps) {
