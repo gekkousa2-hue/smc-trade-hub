@@ -27,7 +27,7 @@ interface ProfilePageProps {
   onGoLive?: () => void;
 }
 
-export default function ProfilePage({ viewUserId, onBack }: ProfilePageProps) {
+export default function ProfilePage({ viewUserId, onBack, onGoLive }: ProfilePageProps) {
   const { t } = useTranslation();
   const [user, setUser] = useState<SupaUser | null>(null);
   const [username, setUsername] = useState("");
