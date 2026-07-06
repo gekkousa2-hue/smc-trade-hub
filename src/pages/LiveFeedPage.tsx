@@ -20,7 +20,6 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showChat, setShowChat] = useState(false);
-  const [showGoLive, setShowGoLive] = useState(false);
   const [user, setUser] = useState<{ id: string; username: string; avatar_url: string | null } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerCountedRef = useRef<Set<string>>(new Set());
