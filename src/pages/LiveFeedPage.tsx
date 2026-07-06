@@ -123,7 +123,7 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : streams.length === 0 ? (
-        <EmptyState onGoLive={handleGoLive} isAuthed={!!user} />
+        <EmptyState />
       ) : (
 
         <div
