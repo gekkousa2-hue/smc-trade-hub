@@ -13,6 +13,8 @@ export default function MainLayout() {
   const [activeTab, setActiveTab] = useState<"live" | "chat" | "profile">("live");
   const [profileViewUserId, setProfileViewUserId] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showGoLive, setShowGoLive] = useState(false);
+  const [goLiveUser, setGoLiveUser] = useState<{ id: string; username: string } | null>(null);
 
   const refreshUnread = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
