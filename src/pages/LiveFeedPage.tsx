@@ -208,20 +208,6 @@ export default function LiveFeedPage({ onViewProfile }: Props) {
         </div>
       )}
 
-      {/* Floating Go Live button */}
-      {!showChat && (
-        <motion.button
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          onClick={handleGoLive}
-          className="absolute right-4 top-[calc(env(safe-area-inset-top)+3.5rem)] z-20 flex items-center gap-1.5 rounded-full bg-gradient-to-r from-primary to-primary/80 text-primary-foreground px-4 py-2 font-bold text-xs shadow-[0_8px_32px_-4px_hsl(var(--primary)/0.6)]"
-        >
-          {user ? <Radio className="h-3.5 w-3.5" /> : <LogIn className="h-3.5 w-3.5" />}
-          {user ? "Efirga chiqish" : "Kirish"}
-        </motion.button>
-      )}
-
-
       {/* Chat overlay */}
       <AnimatePresence>
         {showChat && streams[currentIndex] && (
