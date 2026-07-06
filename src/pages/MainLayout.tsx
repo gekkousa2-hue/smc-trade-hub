@@ -61,6 +61,26 @@ export default function MainLayout() {
     setActiveTab(profileFrom);
   }, [profileFrom]);
 
+  const handleGoLive = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("Efirga chiqish uchun tizimga kiring");
+      return;
+    }
+    const { data: p } = await supabase
+      .from("profiles")
+      .select("username")
+      .eq("user_id", user.id)
+      .single();
+    setGoLiveUser({ id: user.id, username: p?.username || user.email?.split("@")[0] || "User" });
+    setShowGoLive(true);
+  }, []);
+
+  const handleCloseGoLive = useCallback(() => {
+    setShowGoLive(false);
+    setGoLiveUser(null);
+  }, []);
+
   return (
     <div className="min-h-screen pb-[calc(4rem+env(safe-area-inset-bottom))]">
       <AnimatePresence mode="wait">
