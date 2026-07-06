@@ -1,9 +1,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { Radio, LogIn } from "lucide-react";
+import { toast } from "sonner";
 import BottomNav from "@/components/BottomNav";
 import LiveFeedPage from "./LiveFeedPage";
 import ChatPage from "./ChatPage";
 import ProfilePage from "./ProfilePage";
+import { GoLive } from "@/components/live/GoLive";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function MainLayout() {
