@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import { chatCache } from "@/lib/chatCache";
@@ -85,10 +85,13 @@ export function useChatState() {
   const [otherTyping, setOtherTyping] = useState(false);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
 
   const tempToRealId = useRef<Map<string, string>>(new Map());
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const activeConversationIdRef = useRef<string | null>(null);
+  const typingChannelRef = useRef<any>(null);
+  const cacheTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   /* ─── Auth ─── */
   useEffect(() => {
@@ -100,28 +103,61 @@ export function useChatState() {
     return () => subscription.unsubscribe();
   }, []);
 
-  /* ─── Online presence ─── */
+  /* ─── Online presence (realtime, instant) ─── */
   useEffect(() => {
     if (!user) return;
-    const updatePresence = async (online: boolean) => {
-      await supabase.from("profiles").update({
+
+    const syncOnline = (channel: any) => {
+      const state = channel.presenceState() as Record<string, any[]>;
+      setOnlineUsers(new Set(Object.keys(state)));
+    };
+
+    const channel = supabase.channel("presence-online", {
+      config: { presence: { key: user.id } },
+    });
+
+    channel
+      .on("presence", { event: "sync" }, () => syncOnline(channel))
+      .on("presence", { event: "join" }, () => syncOnline(channel))
+      .on("presence", { event: "leave" }, () => syncOnline(channel))
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({ online_at: new Date().toISOString() });
+        }
+      });
+
+    // Keep DB last_seen fresh (low frequency — presence handles the live state)
+    const updatePresence = (online: boolean) => {
+      supabase.from("profiles").update({
         is_online: online,
         last_seen: new Date().toISOString(),
-      } as any).eq("user_id", user.id);
+      } as any).eq("user_id", user.id).then();
     };
     updatePresence(true);
-    const interval = setInterval(() => updatePresence(true), 60000);
-    const handleVisibility = () => updatePresence(!document.hidden);
+    const interval = setInterval(() => updatePresence(true), 120000);
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        channel.untrack();
+        updatePresence(false);
+      } else {
+        channel.track({ online_at: new Date().toISOString() });
+        updatePresence(true);
+      }
+    };
     document.addEventListener("visibilitychange", handleVisibility);
-    const handleBeforeUnload = () => updatePresence(false);
-    window.addEventListener("beforeunload", handleBeforeUnload);
+    const handleHide = () => updatePresence(false);
+    window.addEventListener("pagehide", handleHide);
+
     return () => {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibility);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handleHide);
       updatePresence(false);
+      supabase.removeChannel(channel);
     };
   }, [user]);
+
 
   /* ─── Conversations (batched, no N+1) ─── */
   const fetchConversations = useCallback(async () => {
@@ -253,11 +289,16 @@ export function useChatState() {
     fetchMessages(activeConversationId);
   }, [activeConversationId, fetchMessages]);
 
-  /* ─── Persist messages to cache whenever they change ─── */
+  /* ─── Persist messages to cache (debounced, off the render path) ─── */
   useEffect(() => {
     if (!activeConversationId || messages.length === 0) return;
-    chatCache.setMessages(activeConversationId, messages);
+    if (cacheTimerRef.current) clearTimeout(cacheTimerRef.current);
+    cacheTimerRef.current = setTimeout(() => {
+      chatCache.setMessages(activeConversationId, messages.filter(m => !m.id.startsWith("temp-")));
+    }, 800);
+    return () => { if (cacheTimerRef.current) clearTimeout(cacheTimerRef.current); };
   }, [activeConversationId, messages]);
+
 
   const loadMoreMessages = useCallback(() => {
     if (!activeConversationId || isLoadingMore || !hasMore || messages.length === 0) return;
@@ -351,33 +392,39 @@ export function useChatState() {
     return () => { supabase.removeChannel(channel); };
   }, [user, debouncedFetchConversations]);
 
-  /* ─── Typing indicator ─── */
+  /* ─── Typing indicator (realtime broadcast — instant, no DB round-trip) ─── */
   useEffect(() => {
-    if (!activeConversationId || !user) return;
+    if (!activeConversationId || !user) { setOtherTyping(false); return; }
+    let clearTimer: NodeJS.Timeout | null = null;
     const channel = supabase
-      .channel(`typing-${activeConversationId}`)
-      .on("postgres_changes", {
-        event: "*", schema: "public", table: "typing_indicators",
-        filter: `conversation_id=eq.${activeConversationId}`,
-      }, (payload) => {
-        const data = payload.new as any;
-        if (data && data.user_id !== user.id) {
-          setOtherTyping(!!data.is_typing);
+      .channel(`typing-${activeConversationId}`, { config: { broadcast: { self: false } } })
+      .on("broadcast", { event: "typing" }, ({ payload }) => {
+        if (!payload || payload.user_id === user.id) return;
+        setOtherTyping(!!payload.is_typing);
+        if (clearTimer) clearTimeout(clearTimer);
+        if (payload.is_typing) {
+          clearTimer = setTimeout(() => setOtherTyping(false), 3500);
         }
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    typingChannelRef.current = channel;
+    return () => {
+      if (clearTimer) clearTimeout(clearTimer);
+      typingChannelRef.current = null;
+      setOtherTyping(false);
+      supabase.removeChannel(channel);
+    };
   }, [activeConversationId, user]);
 
-  const sendTyping = useCallback(async (typing: boolean) => {
-    if (!activeConversationId || !user) return;
-    await supabase.from("typing_indicators").upsert({
-      conversation_id: activeConversationId,
-      user_id: user.id,
-      is_typing: typing,
-      updated_at: new Date().toISOString(),
-    } as any, { onConflict: "conversation_id,user_id" });
+  const sendTyping = useCallback((typing: boolean) => {
+    if (!activeConversationId || !user || !typingChannelRef.current) return;
+    typingChannelRef.current.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { user_id: user.id, is_typing: typing },
+    });
   }, [activeConversationId, user]);
+
 
   const handleTyping = useCallback(() => {
     if (!isTyping) {
@@ -460,7 +507,17 @@ export function useChatState() {
         tempToRealId.current.set(data.id, tempId);
         setSendingIds(prev => { const s = new Set(prev); s.delete(tempId); return s; });
         setMessages(prev => prev.map(m =>
-          m.id === tempId ? { ...m, id: data.id, status: "sent", created_at: data.created_at, failed: false, _retryPayload: undefined } : m
+          m.id === tempId
+            ? {
+                ...m,
+                id: data.id,
+                status: "sent",
+                created_at: data.created_at,
+                media_url: payload.mediaUrl ?? m.media_url,
+                failed: false,
+                _retryPayload: undefined,
+              }
+            : m
         ));
         return;
       } catch (err) {
@@ -515,6 +572,47 @@ export function useChatState() {
     }, activeConversationId);
   };
 
+  /* ─── Media: instant local preview, upload in the background ─── */
+  const sendMediaMessage = async (file: Blob, ext: string, mediaType: "image" | "video" | "audio" | "file", caption = "") => {
+    if (!user || !activeConversationId) return;
+    const convId = activeConversationId;
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
+    const localUrl = URL.createObjectURL(file);
+    const currentReplyTo = replyTo;
+    setReplyTo(null);
+
+    const optimisticMsg: Message = {
+      id: tempId,
+      content: caption || (mediaType === "audio" ? "🎤" : mediaType === "video" ? "🎥" : mediaType === "image" ? "📷" : "📎"),
+      sender_id: user.id,
+      created_at: new Date().toISOString(),
+      conversation_id: convId,
+      media_url: localUrl,
+      media_type: mediaType,
+      status: "sending",
+      reply_to_id: currentReplyTo?.id || null,
+      reply_to: currentReplyTo,
+      profiles: null,
+    };
+    setSendingIds(prev => new Set(prev).add(tempId));
+    setMessages(prev => mergeMessages(prev, [optimisticMsg]));
+
+    const url = await uploadMedia(file, ext);
+    if (!url) {
+      setSendingIds(prev => { const s = new Set(prev); s.delete(tempId); return s; });
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: "failed", failed: true } : m));
+      return;
+    }
+    await persistMessage(tempId, {
+      content: caption,
+      mediaUrl: url,
+      mediaType,
+      replyToId: currentReplyTo?.id || null,
+    }, convId);
+    setTimeout(() => URL.revokeObjectURL(localUrl), 5000);
+  };
+
+
   const retryMessage = async (tempId: string) => {
     const msg = messages.find(m => m.id === tempId);
     if (!msg || !msg._retryPayload || !msg.conversation_id) return;
@@ -561,8 +659,21 @@ export function useChatState() {
     setReplyTo(msg);
   };
 
+  /* ─── Merge live presence into conversation / search profiles ─── */
+  const conversationsView = useMemo(() => conversations.map(c => (
+    c.other_user
+      ? { ...c, other_user: { ...c.other_user, is_online: onlineUsers.has(c.other_user.user_id) } }
+      : c
+  )), [conversations, onlineUsers]);
+
+  const searchResultsView = useMemo(
+    () => searchResults.map(p => ({ ...p, is_online: onlineUsers.has(p.user_id) })),
+    [searchResults, onlineUsers]
+  );
+
   return {
-    user, conversations, activeConversationId, messages, newMessage, searchQuery, searchResults,
+    user, conversations: conversationsView, activeConversationId, messages, newMessage, searchQuery,
+    searchResults: searchResultsView, onlineUsers,
     isSearching, showSidebar, sendingIds, confirmedIds, showEmoji, isRecording, recordingType,
     recordingTime, showAttachMenu, contextMenuMsgId, contextMenuPos, editingMsgId, editContent,
     replyTo, isLoadingMore, hasMore, otherTyping, loadingConversations, loadingMessages,
@@ -571,7 +682,7 @@ export function useChatState() {
     setShowEmoji, setIsRecording, setRecordingType, setRecordingTime, setShowAttachMenu,
     setContextMenuMsgId, setContextMenuPos, setEditingMsgId, setEditContent, setReplyTo,
     // Actions
-    openConversation, uploadMedia, sendMessage, deleteMessage, startEditing, saveEdit, cancelEdit,
+    openConversation, uploadMedia, sendMessage, sendMediaMessage, deleteMessage, startEditing, saveEdit, cancelEdit,
     togglePin, replyToMessage, loadMoreMessages, handleTyping, fetchConversations, retryMessage,
     setSendingIds, setConfirmedIds, setMessages,
   };
