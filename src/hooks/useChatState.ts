@@ -289,11 +289,16 @@ export function useChatState() {
     fetchMessages(activeConversationId);
   }, [activeConversationId, fetchMessages]);
 
-  /* ─── Persist messages to cache whenever they change ─── */
+  /* ─── Persist messages to cache (debounced, off the render path) ─── */
   useEffect(() => {
     if (!activeConversationId || messages.length === 0) return;
-    chatCache.setMessages(activeConversationId, messages);
+    if (cacheTimerRef.current) clearTimeout(cacheTimerRef.current);
+    cacheTimerRef.current = setTimeout(() => {
+      chatCache.setMessages(activeConversationId, messages.filter(m => !m.id.startsWith("temp-")));
+    }, 800);
+    return () => { if (cacheTimerRef.current) clearTimeout(cacheTimerRef.current); };
   }, [activeConversationId, messages]);
+
 
   const loadMoreMessages = useCallback(() => {
     if (!activeConversationId || isLoadingMore || !hasMore || messages.length === 0) return;
