@@ -73,8 +73,7 @@ export default function ChatPage({ onViewProfile }: ChatPageProps) {
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: type === "audio" ? "audio/webm" : "video/webm" });
-        const url = await state.uploadMedia(blob, "webm");
-        if (url) await state.sendMessage(undefined, url, type);
+        await state.sendMediaMessage(blob, "webm", type);
         stopStreamTracks();
       };
       mediaRecorderRef.current = recorder;
