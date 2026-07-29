@@ -572,6 +572,47 @@ export function useChatState() {
     }, activeConversationId);
   };
 
+  /* ─── Media: instant local preview, upload in the background ─── */
+  const sendMediaMessage = async (file: Blob, ext: string, mediaType: "image" | "video" | "audio" | "file", caption = "") => {
+    if (!user || !activeConversationId) return;
+    const convId = activeConversationId;
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
+    const localUrl = URL.createObjectURL(file);
+    const currentReplyTo = replyTo;
+    setReplyTo(null);
+
+    const optimisticMsg: Message = {
+      id: tempId,
+      content: caption || (mediaType === "audio" ? "🎤" : mediaType === "video" ? "🎥" : mediaType === "image" ? "📷" : "📎"),
+      sender_id: user.id,
+      created_at: new Date().toISOString(),
+      conversation_id: convId,
+      media_url: localUrl,
+      media_type: mediaType,
+      status: "sending",
+      reply_to_id: currentReplyTo?.id || null,
+      reply_to: currentReplyTo,
+      profiles: null,
+    };
+    setSendingIds(prev => new Set(prev).add(tempId));
+    setMessages(prev => mergeMessages(prev, [optimisticMsg]));
+
+    const url = await uploadMedia(file, ext);
+    if (!url) {
+      setSendingIds(prev => { const s = new Set(prev); s.delete(tempId); return s; });
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: "failed", failed: true } : m));
+      return;
+    }
+    await persistMessage(tempId, {
+      content: caption,
+      mediaUrl: url,
+      mediaType,
+      replyToId: currentReplyTo?.id || null,
+    }, convId);
+    setTimeout(() => URL.revokeObjectURL(localUrl), 5000);
+  };
+
+
   const retryMessage = async (tempId: string) => {
     const msg = messages.find(m => m.id === tempId);
     if (!msg || !msg._retryPayload || !msg.conversation_id) return;
