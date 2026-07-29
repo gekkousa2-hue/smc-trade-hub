@@ -392,33 +392,39 @@ export function useChatState() {
     return () => { supabase.removeChannel(channel); };
   }, [user, debouncedFetchConversations]);
 
-  /* ─── Typing indicator ─── */
+  /* ─── Typing indicator (realtime broadcast — instant, no DB round-trip) ─── */
   useEffect(() => {
-    if (!activeConversationId || !user) return;
+    if (!activeConversationId || !user) { setOtherTyping(false); return; }
+    let clearTimer: NodeJS.Timeout | null = null;
     const channel = supabase
-      .channel(`typing-${activeConversationId}`)
-      .on("postgres_changes", {
-        event: "*", schema: "public", table: "typing_indicators",
-        filter: `conversation_id=eq.${activeConversationId}`,
-      }, (payload) => {
-        const data = payload.new as any;
-        if (data && data.user_id !== user.id) {
-          setOtherTyping(!!data.is_typing);
+      .channel(`typing-${activeConversationId}`, { config: { broadcast: { self: false } } })
+      .on("broadcast", { event: "typing" }, ({ payload }) => {
+        if (!payload || payload.user_id === user.id) return;
+        setOtherTyping(!!payload.is_typing);
+        if (clearTimer) clearTimeout(clearTimer);
+        if (payload.is_typing) {
+          clearTimer = setTimeout(() => setOtherTyping(false), 3500);
         }
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    typingChannelRef.current = channel;
+    return () => {
+      if (clearTimer) clearTimeout(clearTimer);
+      typingChannelRef.current = null;
+      setOtherTyping(false);
+      supabase.removeChannel(channel);
+    };
   }, [activeConversationId, user]);
 
-  const sendTyping = useCallback(async (typing: boolean) => {
-    if (!activeConversationId || !user) return;
-    await supabase.from("typing_indicators").upsert({
-      conversation_id: activeConversationId,
-      user_id: user.id,
-      is_typing: typing,
-      updated_at: new Date().toISOString(),
-    } as any, { onConflict: "conversation_id,user_id" });
+  const sendTyping = useCallback((typing: boolean) => {
+    if (!activeConversationId || !user || !typingChannelRef.current) return;
+    typingChannelRef.current.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { user_id: user.id, is_typing: typing },
+    });
   }, [activeConversationId, user]);
+
 
   const handleTyping = useCallback(() => {
     if (!isTyping) {
