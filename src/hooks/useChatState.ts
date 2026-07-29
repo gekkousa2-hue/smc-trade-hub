@@ -659,8 +659,21 @@ export function useChatState() {
     setReplyTo(msg);
   };
 
+  /* ─── Merge live presence into conversation / search profiles ─── */
+  const conversationsView = useMemo(() => conversations.map(c => (
+    c.other_user
+      ? { ...c, other_user: { ...c.other_user, is_online: onlineUsers.has(c.other_user.user_id) } }
+      : c
+  )), [conversations, onlineUsers]);
+
+  const searchResultsView = useMemo(
+    () => searchResults.map(p => ({ ...p, is_online: onlineUsers.has(p.user_id) })),
+    [searchResults, onlineUsers]
+  );
+
   return {
-    user, conversations, activeConversationId, messages, newMessage, searchQuery, searchResults,
+    user, conversations: conversationsView, activeConversationId, messages, newMessage, searchQuery,
+    searchResults: searchResultsView, onlineUsers,
     isSearching, showSidebar, sendingIds, confirmedIds, showEmoji, isRecording, recordingType,
     recordingTime, showAttachMenu, contextMenuMsgId, contextMenuPos, editingMsgId, editContent,
     replyTo, isLoadingMore, hasMore, otherTyping, loadingConversations, loadingMessages,
@@ -669,7 +682,7 @@ export function useChatState() {
     setShowEmoji, setIsRecording, setRecordingType, setRecordingTime, setShowAttachMenu,
     setContextMenuMsgId, setContextMenuPos, setEditingMsgId, setEditContent, setReplyTo,
     // Actions
-    openConversation, uploadMedia, sendMessage, deleteMessage, startEditing, saveEdit, cancelEdit,
+    openConversation, uploadMedia, sendMessage, sendMediaMessage, deleteMessage, startEditing, saveEdit, cancelEdit,
     togglePin, replyToMessage, loadMoreMessages, handleTyping, fetchConversations, retryMessage,
     setSendingIds, setConfirmedIds, setMessages,
   };
