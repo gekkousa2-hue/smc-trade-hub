@@ -110,16 +110,42 @@ export default function ChatPage({ onViewProfile }: ChatPageProps) {
     state.setRecordingTime(0);
   };
 
+  // Downscale big images before upload → much faster sending
+  const compressImage = (file: File): Promise<Blob> =>
+    new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const MAX = 1280;
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        if (scale === 1 && file.size < 400_000) { URL.revokeObjectURL(url); resolve(file); return; }
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { URL.revokeObjectURL(url); resolve(file); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((b) => { URL.revokeObjectURL(url); resolve(b || file); }, "image/jpeg", 0.82);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+      img.src = url;
+    });
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !state.user) return;
     state.setShowAttachMenu(false);
-    const ext = file.name.split(".").pop() || "file";
-    const isImage = file.type.startsWith("image/");
-    const url = await state.uploadMedia(file, ext);
-    if (url) await state.sendMessage(undefined, url, isImage ? "image" : "file");
     e.target.value = "";
+    const isImage = file.type.startsWith("image/");
+    if (isImage) {
+      const blob = await compressImage(file);
+      await state.sendMediaMessage(blob, "jpg", "image");
+    } else {
+      const ext = file.name.split(".").pop() || "file";
+      await state.sendMediaMessage(file, ext, "file", file.name);
+    }
   };
+
 
   const activeConversation = state.conversations.find(c => c.id === state.activeConversationId);
 
