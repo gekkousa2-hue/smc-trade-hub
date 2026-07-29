@@ -507,7 +507,17 @@ export function useChatState() {
         tempToRealId.current.set(data.id, tempId);
         setSendingIds(prev => { const s = new Set(prev); s.delete(tempId); return s; });
         setMessages(prev => prev.map(m =>
-          m.id === tempId ? { ...m, id: data.id, status: "sent", created_at: data.created_at, failed: false, _retryPayload: undefined } : m
+          m.id === tempId
+            ? {
+                ...m,
+                id: data.id,
+                status: "sent",
+                created_at: data.created_at,
+                media_url: payload.mediaUrl ?? m.media_url,
+                failed: false,
+                _retryPayload: undefined,
+              }
+            : m
         ));
         return;
       } catch (err) {
