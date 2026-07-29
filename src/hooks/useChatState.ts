@@ -85,10 +85,13 @@ export function useChatState() {
   const [otherTyping, setOtherTyping] = useState(false);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
 
   const tempToRealId = useRef<Map<string, string>>(new Map());
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const activeConversationIdRef = useRef<string | null>(null);
+  const typingChannelRef = useRef<any>(null);
+  const cacheTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   /* ─── Auth ─── */
   useEffect(() => {
@@ -100,28 +103,61 @@ export function useChatState() {
     return () => subscription.unsubscribe();
   }, []);
 
-  /* ─── Online presence ─── */
+  /* ─── Online presence (realtime, instant) ─── */
   useEffect(() => {
     if (!user) return;
-    const updatePresence = async (online: boolean) => {
-      await supabase.from("profiles").update({
+
+    const syncOnline = (channel: any) => {
+      const state = channel.presenceState() as Record<string, any[]>;
+      setOnlineUsers(new Set(Object.keys(state)));
+    };
+
+    const channel = supabase.channel("presence-online", {
+      config: { presence: { key: user.id } },
+    });
+
+    channel
+      .on("presence", { event: "sync" }, () => syncOnline(channel))
+      .on("presence", { event: "join" }, () => syncOnline(channel))
+      .on("presence", { event: "leave" }, () => syncOnline(channel))
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({ online_at: new Date().toISOString() });
+        }
+      });
+
+    // Keep DB last_seen fresh (low frequency — presence handles the live state)
+    const updatePresence = (online: boolean) => {
+      supabase.from("profiles").update({
         is_online: online,
         last_seen: new Date().toISOString(),
-      } as any).eq("user_id", user.id);
+      } as any).eq("user_id", user.id).then();
     };
     updatePresence(true);
-    const interval = setInterval(() => updatePresence(true), 60000);
-    const handleVisibility = () => updatePresence(!document.hidden);
+    const interval = setInterval(() => updatePresence(true), 120000);
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        channel.untrack();
+        updatePresence(false);
+      } else {
+        channel.track({ online_at: new Date().toISOString() });
+        updatePresence(true);
+      }
+    };
     document.addEventListener("visibilitychange", handleVisibility);
-    const handleBeforeUnload = () => updatePresence(false);
-    window.addEventListener("beforeunload", handleBeforeUnload);
+    const handleHide = () => updatePresence(false);
+    window.addEventListener("pagehide", handleHide);
+
     return () => {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibility);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handleHide);
       updatePresence(false);
+      supabase.removeChannel(channel);
     };
   }, [user]);
+
 
   /* ─── Conversations (batched, no N+1) ─── */
   const fetchConversations = useCallback(async () => {
